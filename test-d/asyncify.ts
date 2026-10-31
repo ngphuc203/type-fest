@@ -1,0 +1,85 @@
+import {expectTypeOf} from 'nz';
+import type {Asyncify} from '../index.d.ts';
+
+declare function getFooSync(name: string): RegExp;
+declare function getFooWithThisArgumentSync(this: Date, name: string): RegExp;
+
+// Basic usage.
+declare const getFooAsync1: Asyncify<typeof getFooSync>;
+expectTypeOf(getFooAsync1).toBe<(name: string) => Promise<RegExp>>();
+
+// Noops with async functions.
+declare const getFooAsync2: Asyncify<typeof getFooAsync1>;
+expectTypeOf(getFooAsync2).toBe<typeof getFooAsync1>();
+
+// Respects `thisArg`.
+declare const getFooWithThisArgumentAsync1: Asyncify<typeof getFooWithThisArgumentSync>;
+const callResult = getFooWithThisArgumentAsync1.call(new Date(), 'foo');
+expectTypeOf(callResult).toBe<Promise<RegExp>>();
+
+// @ts-expect-error
+// eslint-disable-next-line @typescript-eslint/no-floating-promises
+getFooWithThisArgumentAsync1.call('not-date', 'foo');
+
+// Each function keeps the promise of its own return type when the input is a union.
+type FunctionUnion = ((name: string) => number) | ((count: number) => string);
+expectTypeOf<Asyncify<FunctionUnion>>().toBe<((name: string) => Promise<number>) | ((count: number) => Promise<string>)>();
+
+// Unwrap asynchronous return values independently for each function.
+type AsyncFunctionUnion = ((name: string) => Promise<number>) | ((count: number) => PromiseLike<string>);
+expectTypeOf<Asyncify<AsyncFunctionUnion>>().toBe<((name: string) => Promise<number>) | ((count: number) => Promise<string>)>();
+expectTypeOf<Asyncify<((name: string) => number) | ((count: number) => Promise<string>)>>().toBe<((name: string) => Promise<number>) | ((count: number) => Promise<string>)>();
+
+// Preserve the receiver alongside each member's arguments and return value.
+type FunctionUnionWithThis = ((this: Date, name: string) => number) | ((this: RegExp, count: number) => string);
+expectTypeOf<Asyncify<FunctionUnionWithThis>>().toBe<((this: Date, name: string) => Promise<number>) | ((this: RegExp, count: number) => Promise<string>)>();
+expectTypeOf<Asyncify<((this: Date, name: string) => number) | ((count: number) => string)>>().toBe<((this: Date, name: string) => Promise<number>) | ((count: number) => Promise<string>)>();
+
+// A member that never returns does not borrow another member's return type.
+expectTypeOf<Asyncify<(() => never) | ((name: string) => number)>>().toBe<(() => Promise<never>) | ((name: string) => Promise<number>)>();
+expectTypeOf<Asyncify<never>>().toBe<never>();
+
+// Optional and rest parameters survive the conversion.
+expectTypeOf<Asyncify<((name?: string) => number) | ((...counts: number[]) => string)>>().toBe<((name?: string) => Promise<number>) | ((...counts: number[]) => Promise<string>)>();
+
+// A union in a single function's return value stays inside its promise.
+expectTypeOf<Asyncify<() => number | Promise<string>>>().toBe<() => Promise<number | string>>();
+
+// A readonly rest parameter, such as a parameter list typed with `as const`, keeps its parameter positions.
+expectTypeOf<Asyncify<(...arguments_: readonly [string, number?]) => boolean>>().toBe<(first: string, second?: number) => Promise<boolean>>();
+expectTypeOf<Asyncify<(first: string, ...rest: readonly number[]) => boolean>>().toBe<(first: string, ...rest: number[]) => Promise<boolean>>();
+
+// A rest-only readonly parameter list remains callable after its return type is wrapped in a promise.
+expectTypeOf<Asyncify<(...rest: readonly number[]) => boolean>>().toBe<(...rest: readonly number[]) => Promise<boolean>>();
+expectTypeOf<Asyncify<(this: Date, ...rest: readonly number[]) => boolean>>().toBe<(this: Date, ...rest: readonly number[]) => Promise<boolean>>();
+
+// Generic callbacks keep their argument tuple and awaited result through the public wrapper.
+function constructAsyncCallback<Arguments extends unknown[], Result>(callback: (...arguments_: Arguments) => Promise<Awaited<Result>>): Asyncify<(...arguments_: Arguments) => Result> {
+	return callback;
+}
+
+async function callAsyncCallback<Arguments extends unknown[], Result>(callback: Asyncify<(...arguments_: Arguments) => Result>, ...arguments_: Arguments): Promise<Awaited<Result>> {
+	return callback(...arguments_);
+}
+
+declare const readonlyTupleCallback: Asyncify<(value: readonly ['ready', 1]) => {readonly value: readonly ['ready', 1]}>;
+const adaptedCallback = constructAsyncCallback<[value: readonly ['ready', 1]], {readonly value: readonly ['ready', 1]}>(readonlyTupleCallback);
+expectTypeOf(adaptedCallback(['ready', 1])).toBe<Promise<{readonly value: readonly ['ready', 1]}>>();
+const genericCallResult = callAsyncCallback(adaptedCallback, ['ready', 1]);
+expectTypeOf(genericCallResult).toBe<Promise<{readonly value: readonly ['ready', 1]}>>();
+// @ts-expect-error The wrapped function keeps its tuple argument's declared values.
+void adaptedCallback(['wrong', 1]);
+
+// Receiver-free callbacks retain their explicit receiver contract while nested thenables are awaited.
+expectTypeOf<Asyncify<(this: void, value: string) => Promise<PromiseLike<number>>>>().toBe<(this: void, value: string) => Promise<number>>();
+expectTypeOf<Asyncify<(this: undefined, value?: number) => boolean>>().toBe<(this: undefined, value?: number) => Promise<boolean>>();
+expectTypeOf<Asyncify<() => void>>().toBe<() => Promise<void>>();
+expectTypeOf<Asyncify<() => unknown>>().toBe<() => Promise<unknown>>();
+expectTypeOf<Asyncify<() => any>>().toBe<() => Promise<any>>();
+
+// A generic wrapper preserves readonly parameters and the receiver while awaiting its result.
+function _constructReadonlyAsyncCallback<Receiver, Arguments extends readonly unknown[], Result>(
+	callback: (this: Receiver, ...arguments_: Arguments) => Promise<Awaited<Result>>,
+): Asyncify<(this: Receiver, ...arguments_: Arguments) => Result> {
+	return callback;
+}

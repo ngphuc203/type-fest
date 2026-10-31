@@ -1,0 +1,110 @@
+import type {PositiveNumericStringGt} from './internal/index.d.ts';
+import type {PositiveInfinity, NegativeInfinity, IsNegative, _Numeric} from './numeric.d.ts';
+import type {Absolute} from './absolute.d.ts';
+import type {UnwrapBrand} from './internal/object.d.ts';
+
+/**
+Returns a boolean for whether a given number is greater than another number.
+
+@example
+```
+import type {GreaterThan} from 'type-fest';
+
+type A = GreaterThan<1, -5>;
+//=> true
+
+type B = GreaterThan<1, 1>;
+//=> false
+
+type C = GreaterThan<1, 5>;
+//=> false
+
+type D = GreaterThan<5n, 1>;
+//=> true
+```
+
+Note: If either argument is the non-literal `number` or `bigint` type, the result is `boolean`.
+
+Note: If both arguments are written in exponential notation with an exponent of the same sign (both `1e+21` and above, or both with a negative exponent like `1e-7`), or one is a `bigint` and the other is `1e+21` or above (or `-1e+21` or below), the result is `boolean` too, because such numbers cannot be compared digit by digit. Any other comparison with a number in exponential notation is still decided.
+
+Note: A `number` above `Number.MAX_SAFE_INTEGER` is compared with a `bigint` by its printed digits, not its exact value. For example, `123456789012345680000` is really `123456789012345683968`, so comparing it with `123456789012345680000n` treats them as equal.
+
+@example
+```
+import type {GreaterThan} from 'type-fest';
+
+type A = GreaterThan<number, 1>;
+//=> boolean
+
+type B = GreaterThan<1, number>;
+//=> boolean
+
+type C = GreaterThan<number, number>;
+//=> boolean
+
+type D = GreaterThan<bigint, 1n>;
+//=> boolean
+```
+
+@example
+```
+import type {GreaterThan} from 'type-fest';
+
+// Use `GreaterThan` to constrain a function parameter to positive numbers.
+declare function setPositive<N extends number>(value: GreaterThan<N, 0> extends true ? N : never): void;
+
+setPositive(1); // ✅ Allowed
+setPositive(2); // ✅ Allowed
+
+// @ts-expect-error
+setPositive(0);
+
+// @ts-expect-error
+setPositive(-1);
+```
+*/
+export type GreaterThan<A extends _Numeric, B extends _Numeric> =
+	_GreaterThan<A extends object ? UnwrapBrand<A> : A, B extends object ? UnwrapBrand<B> : B>;
+
+// Numeric enum members accept `number`, but their printed types still identify their known values.
+type _GreaterThan<A extends _Numeric, B extends _Numeric> =
+	A extends _Numeric // For distributing `A`
+		? B extends _Numeric // For distributing `B`
+			? `${number}` extends `${A | B}`
+				? boolean
+				: bigint extends A | B
+					? boolean
+					// A `number` of `1e+21` and above is printed in exponential notation, which cannot be compared digit by digit with the plain digits of a `bigint`.
+					: IsBigIntAgainstLargeExponent<A, B> extends true
+						? boolean
+						: A extends PositiveInfinity
+							? B extends PositiveInfinity ? false : true
+							: B extends NegativeInfinity
+								? A extends NegativeInfinity ? false : true
+								: A extends NegativeInfinity
+									? false
+									: B extends PositiveInfinity
+										? false
+										: [IsNegative<A>, IsNegative<B>] extends infer Signs extends [boolean, boolean]
+											? [true, false] extends Signs
+												? false
+												: [false, true] extends Signs
+													? true
+													: [false, false] extends Signs
+														? PositiveNumericStringGt<`${A}`, `${B}`>
+														: PositiveNumericStringGt<`${Absolute<B>}`, `${Absolute<A>}`>
+											: never
+			: never // Should never happen
+		: never; // Should never happen
+
+/**
+Whether one of the values is a `bigint` and the other is a `number` of `1e+21` and above, which is printed in exponential notation.
+*/
+type IsBigIntAgainstLargeExponent<A extends _Numeric, B extends _Numeric> =
+	A extends bigint
+		? `${B}` extends `${string}e+${string}` ? true : false
+		: B extends bigint
+			? `${A}` extends `${string}e+${string}` ? true : false
+			: false;
+
+export {};

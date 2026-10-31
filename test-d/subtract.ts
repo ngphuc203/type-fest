@@ -1,0 +1,158 @@
+import {expectTypeOf} from 'nz';
+import type {Opaque, Tagged, Subtract} from '../index.d.ts';
+import type {NegativeInfinity, PositiveInfinity} from '../source/numeric.d.ts';
+
+// Positive result
+expectTypeOf<Subtract<10, -2>>().toBe<12>();
+expectTypeOf<Subtract<0, 0>>().toBe<0>();
+expectTypeOf<Subtract<2, 2>>().toBe<0>();
+expectTypeOf<Subtract<-1, -3>>().toBe<2>();
+expectTypeOf<Subtract<12, 5>>().toBe<7>();
+expectTypeOf<Subtract<69, 0>>().toBe<69>();
+expectTypeOf<Subtract<999, -1>>().toBe<1000>();
+expectTypeOf<Subtract<999, -999>>().toBe<1998>();
+
+// Negative result
+expectTypeOf<Subtract<1, 2>>().toBe<-1>();
+expectTypeOf<Subtract<-10, -4>>().toBe<-6>();
+expectTypeOf<Subtract<-10, 4>>().toBe<-14>();
+expectTypeOf<Subtract<-111, 222>>().toBe<-333>();
+expectTypeOf<Subtract<0, 420>>().toBe<-420>();
+expectTypeOf<Subtract<-999, 1>>().toBe<-1000>();
+expectTypeOf<Subtract<-999, 999>>().toBe<-1998>();
+
+// Infinity
+expectTypeOf<Subtract<PositiveInfinity, 999>>().toBe<PositiveInfinity>();
+expectTypeOf<Subtract<-999, PositiveInfinity>>().toBe<NegativeInfinity>();
+expectTypeOf<Subtract<NegativeInfinity, 999>>().toBe<NegativeInfinity>();
+expectTypeOf<Subtract<999, NegativeInfinity>>().toBe<PositiveInfinity>();
+expectTypeOf<Subtract<NegativeInfinity, PositiveInfinity>>().toBe<NegativeInfinity>();
+
+// Number
+expectTypeOf<Subtract<number, 2>>().toBe<number>();
+expectTypeOf<Subtract<2, number>>().toBe<number>();
+expectTypeOf<Subtract<number, number>>().toBe<number>();
+expectTypeOf<Subtract<NegativeInfinity, NegativeInfinity>>().toBe<number>();
+expectTypeOf<Subtract<PositiveInfinity, PositiveInfinity>>().toBe<number>();
+expectTypeOf<Subtract<number, PositiveInfinity>>().toBe<number>();
+expectTypeOf<Subtract<PositiveInfinity, number>>().toBe<number>();
+
+// Union
+expectTypeOf<Subtract<10, 1 | 2>>().toBe<9 | 8>();
+expectTypeOf<Subtract<10 | 5, 1>>().toBe<9 | 4>();
+expectTypeOf<Subtract<10 | 5, 1 | 2>>().toBe<9 | 8 | 4 | 3>();
+expectTypeOf<Subtract<10 | -5, -1 | 2>>().toBe<11 | 8 | -4 | -7>();
+
+// Large numbers
+expectTypeOf<Subtract<1111, 2222>>().toBe<-1111>();
+expectTypeOf<Subtract<-5000, 2000>>().toBe<-7000>();
+expectTypeOf<Subtract<6540, -530>>().toBe<7070>();
+expectTypeOf<Subtract<-8888, -12>>().toBe<-8876>();
+expectTypeOf<Subtract<10_000, 1>>().toBe<9999>();
+expectTypeOf<Subtract<1_000_000, 1>>().toBe<999_999>();
+expectTypeOf<Subtract<1, 1_000_000>>().toBe<-999_999>();
+expectTypeOf<Subtract<1000, 999>>().toBe<1>();
+expectTypeOf<Subtract<100_000, 99_990>>().toBe<10>();
+expectTypeOf<Subtract<123_456_789, 123_456_788>>().toBe<1>();
+expectTypeOf<Subtract<1_000_000, -1>>().toBe<1_000_001>();
+expectTypeOf<Subtract<-1_000_000, 1>>().toBe<-1_000_001>();
+expectTypeOf<Subtract<-1_000_000, -1>>().toBe<-999_999>();
+expectTypeOf<Subtract<1_000_000 | 2_000_000, 1>>().toBe<999_999 | 1_999_999>();
+expectTypeOf<Subtract<9_007_199_254_740_991, 9_007_199_254_740_990>>().toBe<1>();
+
+// A result that cannot be represented exactly is `number`.
+expectTypeOf<Subtract<9_007_199_254_740_991, -2>>().toBe<number>();
+expectTypeOf<Subtract<-9_007_199_254_740_991, 2>>().toBe<number>();
+
+// A decimal fraction is not supported, so the result is `never` rather than a silently truncated whole number.
+expectTypeOf<Subtract<0.5, 0.25>>().toBe<never>();
+expectTypeOf<Subtract<1.5, 1.25>>().toBe<never>();
+expectTypeOf<Subtract<-0.5, -0.25>>().toBe<never>();
+
+// A number written in exponent notation cannot be computed digit by digit either, so it resolves to `never` rather than a silently truncated whole number.
+expectTypeOf<Subtract<1e-7, 1>>().toBe<never>();
+expectTypeOf<Subtract<3, 1e-7>>().toBe<never>();
+expectTypeOf<Subtract<1, 1e21>>().toBe<never>();
+
+// Equality applies to one pair of operands, not every member of the subtrahend.
+expectTypeOf<Subtract<2, 2 | 3>>().toBe<0 | -1>();
+expectTypeOf<Subtract<2 | 3, 2>>().toBe<0 | 1>();
+expectTypeOf<Subtract<1 | 2, 1 | 2>>().toBe<-1 | 0 | 1>();
+
+// Numeric enum members hold known integers and can be used in arithmetic.
+enum Count {
+	Few = 3,
+	Many = 7,
+	Deficit = -3,
+}
+
+expectTypeOf<Subtract<Count.Few, 2>>().toBe<1>();
+expectTypeOf<Subtract<2, Count.Few>>().toBe<-1>();
+expectTypeOf<Subtract<Count.Deficit, 1>>().toBe<-4>();
+expectTypeOf<Subtract<Count.Few, Count.Many>>().toBe<-4>();
+expectTypeOf<Subtract<Count.Few, Count.Deficit>>().toBe<6>();
+expectTypeOf<Subtract<Count.Deficit, Count.Few>>().toBe<-6>();
+expectTypeOf<Subtract<Count.Deficit, Count.Deficit>>().toBe<0>();
+expectTypeOf<Subtract<Count.Few | Count.Many, 1>>().toBe<2 | 6>();
+expectTypeOf<Subtract<Count.Few, number>>().toBe<number>();
+expectTypeOf<Subtract<number, Count.Few>>().toBe<number>();
+expectTypeOf<Subtract<Count.Few, any>>().toBe<number>();
+expectTypeOf<Subtract<any, Count.Few>>().toBe<number>();
+expectTypeOf<Subtract<Count.Few, never>>().toBe<never>();
+expectTypeOf<Subtract<never, Count.Few>>().toBe<never>();
+// @ts-expect-error - Only numbers can be used in arithmetic.
+type UnknownOperand = Subtract<unknown, Count.Few>;
+
+// The zero and infinity shortcuts return plain literals, like the other paths.
+enum Limit {
+	None = 0,
+	Few = 3,
+	Unlimited = 1e999, // eslint-disable-line no-loss-of-precision
+	Overdrawn = -1e999, // eslint-disable-line no-loss-of-precision
+}
+
+expectTypeOf<Subtract<Limit.Few, 0>>().toBe<3>();
+expectTypeOf<Subtract<Limit.Few, Limit.None>>().toBe<3>();
+expectTypeOf<Subtract<0, Limit.Few>>().toBe<-3>();
+expectTypeOf<Subtract<Limit.Few, Limit.Few>>().toBe<0>();
+expectTypeOf<Subtract<Limit.Unlimited, 5>>().toBe<PositiveInfinity>();
+expectTypeOf<Subtract<5, Limit.Unlimited>>().toBe<NegativeInfinity>();
+expectTypeOf<Subtract<Limit.Overdrawn, 5>>().toBe<NegativeInfinity>();
+expectTypeOf<Subtract<5, Limit.Overdrawn>>().toBe<PositiveInfinity>();
+expectTypeOf<Subtract<Limit.Unlimited, Limit.Unlimited>>().toBe<number>();
+
+// A numeric brand does not change arithmetic on its underlying value.
+expectTypeOf<Subtract<Tagged<5, 'Amount'>, 1>>().toBe<4>();
+expectTypeOf<Subtract<5, Tagged<1, 'Amount'>>>().toBe<4>();
+
+expectTypeOf<Subtract<Tagged<5, 'Amount'>, Tagged<1, 'Amount'>>>().toBe<4>();
+expectTypeOf<Subtract<Tagged<1, 'Amount'>, Tagged<-2, 'Amount'>>>().toBe<3>();
+expectTypeOf<Subtract<Tagged<-2, 'Amount'>, Tagged<1, 'Amount'>>>().toBe<-3>();
+expectTypeOf<Subtract<Tagged<-2, 'Amount'>, Tagged<-3, 'Amount'>>>().toBe<1>();
+expectTypeOf<Subtract<Tagged<0, 'Amount'>, Tagged<2, 'Amount'>>>().toBe<-2>();
+expectTypeOf<Subtract<Tagged<2, 'Amount'>, Tagged<0, 'Amount'>>>().toBe<2>();
+
+expectTypeOf<Subtract<Opaque<5, 'Amount'>, Opaque<2, 'Amount'>>>().toBe<3>();
+expectTypeOf<Subtract<Tagged<Tagged<5, 'Amount'>, 'Validated'>, 2>>().toBe<3>();
+expectTypeOf<Subtract<5 & {readonly __brand: unique symbol}, 2>>().toBe<3>();
+expectTypeOf<Subtract<Tagged<1 | 2, 'Amount'>, Tagged<1 | 2, 'Amount'>>>().toBe<-1 | 0 | 1>();
+expectTypeOf<Subtract<Tagged<number, 'Amount'>, 2>>().toBe<number>();
+expectTypeOf<Subtract<Tagged<1.5, 'Amount'>, 2>>().toBe<never>();
+expectTypeOf<Subtract<2, Tagged<1e-7, 'Amount'>>>().toBe<never>();
+expectTypeOf<Subtract<Tagged<1e21, 'Amount'>, 2>>().toBe<never>();
+expectTypeOf<Subtract<Tagged<PositiveInfinity, 'Amount'>, 2>>().toBe<PositiveInfinity>();
+expectTypeOf<Subtract<Tagged<NegativeInfinity, 'Amount'>, 2>>().toBe<NegativeInfinity>();
+expectTypeOf<Subtract<Tagged<PositiveInfinity, 'Amount'>, Tagged<PositiveInfinity, 'Amount'>>>().toBe<number>();
+expectTypeOf<Subtract<Tagged<2, 'Amount'>, any>>().toBe<number>();
+expectTypeOf<Subtract<any, Tagged<2, 'Amount'>>>().toBe<number>();
+expectTypeOf<Subtract<Tagged<2, 'Amount'>, never>>().toBe<never>();
+expectTypeOf<Subtract<never, Tagged<2, 'Amount'>>>().toBe<never>();
+
+// Opposite signs add magnitudes, with the result's sign determined by the minuend.
+expectTypeOf<Subtract<2, -1000>>().toBe<1002>();
+expectTypeOf<Subtract<-2, 1000>>().toBe<-1002>();
+expectTypeOf<Subtract<-3 | 3, -100 | 100>>().toBe<-103 | -97 | 97 | 103>();
+
+function _readNumericDifference<First extends number, Second extends number>(value: Subtract<First, Second>): number {
+	return value;
+}

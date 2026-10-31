@@ -1,0 +1,164 @@
+import type {IsUnknown} from './is-unknown.d.ts';
+import type {NormalizedKeys, ObjectValue, VariablePartOfArray} from './internal/index.d.ts';
+import type {UnknownArray} from './unknown-array.d.ts';
+
+/**
+Returns the index at which the rest element of the given array starts, that is, the number of elements before it.
+
+Counts the fixed prefix directly without constructing the unused split tuple parts.
+
+@example
+```ts
+type A = RestElementIndex<[string, ...boolean[]]>;
+//=> 1
+
+type B = RestElementIndex<[string, number?, ...boolean[]]>;
+//=> 2
+```
+*/
+type RestElementIndex<ArrayType extends UnknownArray, Counter extends unknown[] = []> =
+	ArrayType extends unknown // For distributing union parameter lists
+		? '0' extends keyof ArrayType
+			? ArrayType extends readonly [unknown?, ...infer Rest]
+				? RestElementIndex<Rest, [...Counter, unknown]>
+				: never // Should never happen
+			: Counter['length']
+		: never; // Should never happen
+
+/**
+Create an array that replaces the given `TArray`'s elements with the given `TObject`'s values at the given indices.
+
+`TArray` and `TObject` supports tailing spread array like `[string, ...boolean[]]`, but does not support `[string, ...boolean[], number]`.
+
+@example
+```ts
+// object
+type A = MergeObjectToArray<[string, number], {0: boolean}>;
+//=> [boolean, number]
+
+// array
+type B = MergeObjectToArray<[string, number], [boolean]>;
+//=> [boolean, number]
+
+// tailing spread array
+type C = MergeObjectToArray<[string, ...boolean[]], {1: number}>;
+//=> [string, ...number[]]
+
+type D = MergeObjectToArray<[string, ...boolean[]], [number, ...string[]]>;
+//=> [number, ...string[]]
+```
+*/
+type MergeObjectToArray<TArray extends UnknownArray, TObject> = TArray extends unknown
+	? MergeObjectToArrayMember<TArray, TObject>
+	: never;
+
+/**
+Transforms one parameter-list member while keeping its original rest index available inside mapped types.
+*/
+type MergeObjectToArrayMember<TArray extends UnknownArray, TObject, RestIndex extends number = RestElementIndex<TArray>> =
+	// If `TObject` is an array like `[0, 1, 2]`
+	TObject extends UnknownArray
+		// If `TObject` is a variable length array, we should use `TObject`'s type as the result type.
+		? number extends TObject['length']
+			? TObject
+			: {
+				[K in keyof TArray]:
+				// If array key `K` is `number`, means it's a rest parameter, we should set the rest parameter type to corresponding type in `TObject`. The index is matched as a string, like in the object branch below, because `keyof` an array also contains `number`, which would make an out of bounds index resolve to `undefined` instead of missing. example: `MergeObjectToArray<[string, ...boolean[]], [string, number]>` => `[string, ...number[]]`
+				number extends K
+					? `${RestIndex}` extends keyof TObject
+						? TObject[`${RestIndex}`]
+						: VariablePartOfArray<TArray>[number]
+					: K extends keyof TObject ? TObject[K] : TArray[K]
+			}
+		: TObject extends object
+			// If `TObject` is an object with number keys like `{0: string, 1: number}`
+			// Normalize after distributing `TObject`, so each replacement member keeps its own keys.
+			? NormalizedKeys<keyof TObject> extends infer ReplacementKeys
+				? {
+					[K in keyof TArray]:
+					K extends `${infer NumberK extends number}`
+						? NumberK extends ReplacementKeys ? ObjectValue<TObject, NumberK> : TArray[K]
+						: number extends K
+						// If array key `K` is `number`, means it's a rest parameter, we should set the rest parameter type to corresponding type in `TObject`.
+						// example: `MergeObjectToArray<[string, ...boolean[]], {1: number}>` => `[string, ...number[]]`
+							? RestIndex extends ReplacementKeys
+								? ObjectValue<TObject, RestIndex>
+								: TArray[K]
+							: never
+				} : never
+			: never;
+
+/**
+Create a function that replaces some parameters with the given parameters.
+
+The parameters that are not specified will be kept as-is. Parameter indices may be numbers or their canonical string forms.
+
+Note:
+- This type will ignore the given function's generic type.
+- An unresolved generic rest tuple can limit calling or comparing the transformed signature until its arguments are instantiated.
+- If you change the parameter type that return type depends on, the return type will not change:
+	```
+	import type {SetParameterType} from 'type-fest';
+
+	const fn = (a: number) => a;
+	//=> (a: number) => number
+
+ 	// We change type of `a` to `string`, but return type is still `number`.
+	type Fn = SetParameterType<typeof fn, {0: string}>;
+ 	//=> (a: string) => number
+	```
+
+Use-case:
+- Define a wrapped function that receives something different while returning the same type.
+- Mocking and testing.
+
+Note that a type containing overloaded functions collapses to its last signature, so `SetParameterType<{(): void; (x: number): void}, [string]>` is `(x: string) => void`, due to a [TypeScript limitation](https://github.com/microsoft/TypeScript/issues/29732).
+
+@example
+```
+import type {SetParameterType} from 'type-fest';
+
+type SuccessData = {success: true; value: number};
+type ErrorData = {success: false; error: string};
+type Data = SuccessData | ErrorData;
+
+type HandleMessage = (data: Data, message: string, ...arguments_: any[]) => void;
+
+type HandleOk = SetParameterType<HandleMessage, {0: SuccessData; 1: 'ok'}>;
+//=> (data: SuccessData, message: 'ok', ...arguments_: any[]) => void
+
+// Another way to define the parameters to replace.
+type HandleError = SetParameterType<HandleMessage, [data: ErrorData, message: 'error']>;
+//=> (data: ErrorData, message: 'error', ...arguments_: any[]) => void
+
+// Change single parameter type.
+type HandleWarn = SetParameterType<HandleMessage, {1: 'warn'}>;
+//=> (data: Data, message: 'warn', ...arguments_: any[]) => void
+
+// Change rest parameter type.
+
+// Way 1: Input full parameter type.
+type HandleLog = SetParameterType<HandleMessage, [data: Data, message: 'log', ...arguments_: string[]]>;
+//=> (data: Data, message: 'log', ...arguments_: string[]) => void
+
+// Way 2: Input rest parameter type by Object index.
+type HandleLog2 = SetParameterType<HandleMessage, {2: string}>;
+//=> (data: Data, message: string, ...arguments_: string[]) => void
+```
+
+@category Function
+*/
+export type SetParameterType<Function_ extends (...arguments_: any[]) => unknown, P extends Record<number, unknown>> =
+	// Just using `Parameters<Fn>` isn't ideal because it doesn't handle the `this` fake parameter.
+	// The inferred array constraint also accepts a readonly rest parameter.
+	Function_ extends (this: infer ThisArgument, ...arguments_: infer Arguments extends UnknownArray) => infer Return
+		? (
+			// If a function did not specify the `this` fake parameter, it will be inferred to `unknown`.
+			// We want to detect this situation just to display a friendlier type upon hovering on an IntelliSense-powered IDE.
+			IsUnknown<ThisArgument> extends true
+				? (...arguments_: MergeObjectToArray<Arguments, P>) => Return
+				: (this: ThisArgument, ...arguments_: MergeObjectToArray<Arguments, P>) => Return
+		)
+		: Function_;	// This part should be unreachable
+
+export {};

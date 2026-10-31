@@ -1,0 +1,393 @@
+import {expectTypeOf} from 'nz';
+import type {Opaque, Tagged} from '../source/tagged.d.ts';
+import type {DigitCharacter} from '../source/characters.d.ts';
+import type {Paths} from '../source/paths.d.ts';
+import type {SetNonNullableDeep} from '../source/set-non-nullable-deep.d.ts';
+import type {LiteralUnion} from '../source/literal-union.d.ts';
+
+expectTypeOf<SetNonNullableDeep<{a: number | null}, 'a'>>().toBe<{a: number}>();
+expectTypeOf<SetNonNullableDeep<{a: number | undefined}, 'a'>>().toBe<{a: number}>();
+expectTypeOf<SetNonNullableDeep<{a: number | null | undefined}, 'a'>>().toBe<{a: number}>();
+expectTypeOf<SetNonNullableDeep<{a?: number | null}, 'a'>>().toBe<{a?: number}>();
+expectTypeOf<SetNonNullableDeep<{a?: number | undefined}, 'a'>>().toBe<{a?: number}>();
+expectTypeOf<SetNonNullableDeep<{a?: number | null | undefined}, 'a'>>().toBe<{a?: number}>();
+
+expectTypeOf<SetNonNullableDeep<{a: number; b: {c: string | null}}, 'b.c'>>().toBe<{a: number; b: {c: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: number; b: {c: string | undefined}}, 'b.c'>>().toBe<{a: number; b: {c: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: number; b: {c: string | null | undefined}}, 'b.c'>>().toBe<{a: number; b: {c: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: number; b: {c?: string | null}}, 'b.c'>>().toBe<{a: number; b: {c?: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: number; b: {c?: string | undefined}}, 'b.c'>>().toBe<{a: number; b: {c?: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: number; b: {c?: string | null | undefined}}, 'b.c'>>().toBe<{a: number; b: {c?: string}}>();
+
+// Becomes `never` when the value is only `null` or `undefined`
+expectTypeOf<SetNonNullableDeep<{a: null | undefined}, 'a'>>().toBe<{a: never}>();
+expectTypeOf<SetNonNullableDeep<{a?: null | undefined}, 'a'>>().toBe<{a?: never}>();
+
+// Ignores keys that are already non-nullable
+expectTypeOf<SetNonNullableDeep<{a: number}, 'a'>>().toBe<{a: number}>();
+expectTypeOf<SetNonNullableDeep<{readonly a?: number}, 'a'>>().toBe<{readonly a?: number}>();
+expectTypeOf<SetNonNullableDeep<{a?: number; b: {c: string}}, 'b.c'>>().toBe<{a?: number; b: {c: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: number; readonly b?: {c?: string}}, 'b.c'>>().toBe<{a: number; readonly b?: {c?: string}}>();
+
+// Removes nullables only from the specified keys, nullables in other paths are preserved
+expectTypeOf<SetNonNullableDeep<{a: number | null | undefined; b: {c: string | null | undefined} | null | undefined}, 'a'>>().toBe<{a: number; b: {c: string | null | undefined} | null | undefined}>();
+expectTypeOf<SetNonNullableDeep<{a: number | null | undefined; b: {c: string | null | undefined} | null | undefined}, 'b'>>().toBe<{a: number | null | undefined; b: {c: string | null | undefined}}>();
+expectTypeOf<SetNonNullableDeep<{a: number | null | undefined; b: {c: string | null | undefined} | null | undefined}, 'b.c'>>().toBe<{a: number | null | undefined; b: {c: string} | null | undefined}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: string | null} | null | undefined}, 'a' | 'a.b'>>().toBe<{a: {b: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: {c: string | undefined} | null} | null | undefined}, 'a.b' | 'a.b.c'>>().toBe<{a: {b: {c: string}} | null | undefined}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: {c: string | undefined} | null} | null | undefined}, 'a' | 'a.b.c'>>().toBe<{a: {b: {c: string} | null}}>();
+expectTypeOf<SetNonNullableDeep<
+	{a: {b?: {c: {d?: {e: number | string} | null; f: {g: boolean | null}} | undefined} | null; h: number | null} | undefined},
+	'a' | 'a.b.c.d' | 'a.b.c.f.g'
+>>().toBe<{a: {b?: {c: {d?: {e: number | string}; f: {g: boolean}} | undefined} | null; h: number | null}}>();
+
+// Unions
+expectTypeOf<SetNonNullableDeep<{a: string | null} | {a?: number | undefined} | {a: boolean | null | undefined}, 'a'>>().toBe<{a: string} | {a?: number} | {a: boolean}>();
+expectTypeOf<SetNonNullableDeep<{a: string | null; b: number | undefined}, 'a' | 'b'>>().toBe<{a: string; b: number}>();
+expectTypeOf<SetNonNullableDeep<{a: string | null; b: {c: {d: {e: number | undefined}} | null} | undefined}, 'a' | 'b.c.d.e'>>().toBe<{a: string; b: {c: {d: {e: number}} | null} | undefined}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: string | null} | undefined} | {a?: number | undefined; b: {c?: string}}, 'a' | 'b.c'>>().toBe<{a: {b: string | null}} | {a?: number; b: {c?: string}}>();
+expectTypeOf<SetNonNullableDeep<
+	{a: string; b: {c?: {d: string | null} | undefined; f?: number} | null} | {a: {b: number | null}; c: null; d?: undefined},
+	'b' | 'b.c.d' | 'a.b' | 'c'
+>>().toBe<{a: string; b: {c?: {d: string} | undefined; f?: number}} | {a: {b: number}; c: never; d?: undefined}>();
+expectTypeOf<SetNonNullableDeep<{a: 1 | null; b: {c: 2 | null}; d?: {e?: {f?: 2 | null}; g?: 3}}, 'a' | 'b' | 'b.c' | 'd.e.f' | 'd.g'>>().toBe<{a: 1; b: {c: 2}; d?: {e?: {f?: 2}; g?: 3}}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: string | null} | {c: string} | {b: {c: string | null} | undefined}}, 'a.b'>>().toBe<{a: {b: string} | {c: string} | {b: {c: string | null}}}>();
+
+// Calls `NonNullableDeep` when `KeyPaths` is `any`
+expectTypeOf<SetNonNullableDeep<{a: number | null; readonly b?: {c: string | undefined} | null}, any>>().toBe<{a: number; readonly b?: {c: string}}>();
+expectTypeOf<SetNonNullableDeep<[[{a: string | null}], Map<{a: string | null}, string | null>], any>>().toBe<[[{a: string}], Map<{a: string}, string>]>();
+
+// Preserves non-nullable values when they are in a union with objects
+expectTypeOf<SetNonNullableDeep<{a?: number | {b: string} | null | undefined}, 'a'>>().toBe<{a?: number | {b: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: Array<{c?: number | null}> | number | null}}, 'a.b'>>().toBe<{a: {b: Array<{c?: number | null}> | number}}>();
+expectTypeOf<SetNonNullableDeep<{a: number | {b: string | number | null} | null | undefined}, 'a' | 'a.b'>>().toBe<{a: number | {b: string | number}}>();
+expectTypeOf<SetNonNullableDeep<{a: number; b: {c: number | null} | {d: string | undefined} | null}, 'b' | 'b.d'>>().toBe<{a: number; b: {c: number | null} | {d: string}}>();
+
+// Preserves `readonly` modifier
+expectTypeOf<SetNonNullableDeep<{a: string; b: {readonly c: number | null}}, 'b.c'>>().toBe<{a: string; b: {readonly c: number}}>();
+expectTypeOf<SetNonNullableDeep<{readonly a: string | null; readonly b: {c: number | null} | null}, 'a' | 'b'>>().toBe<{readonly a: string; readonly b: {c: number | null}}>();
+expectTypeOf<SetNonNullableDeep<{readonly a: string | null; readonly b: {readonly c: number | null} | null}, 'a' | 'b' | 'b.c'>>().toBe<{readonly a: string; readonly b: {readonly c: number}}>();
+
+// Number keys
+expectTypeOf<SetNonNullableDeep<{0: 1; 1: {2?: string | null}}, '1.2'>>().toBe<{0: 1; 1: {2?: string}}>();
+expectTypeOf<SetNonNullableDeep<{0: 1 | null; 1?: {2: string | null} | undefined}, 0 | 1>>().toBe<{0: 1; 1?: {2: string | null}}>();
+
+// Number keys containing dots
+// NOTE: Passing "1.2" instead of 1.2 will treat it as a path instead of a key
+expectTypeOf<SetNonNullableDeep<{1.2?: string | null; 1?: {2?: string | null} | null}, 1.2>>().toBe<{1.2?: string; 1?: {2?: string | null} | null}>();
+expectTypeOf<SetNonNullableDeep<{1.2?: string | null; 1?: {2?: string | null} | null}, '1.2'>>().toBe<{1.2?: string | null; 1?: {2?: string} | null}>();
+expectTypeOf<SetNonNullableDeep<{1.2?: string | undefined; 1?: {2?: string | undefined} | undefined}, 1.2 | '1.2'>>().toBe<{1.2?: string; 1?: {2?: string} | undefined}>();
+
+// Index signatures
+expectTypeOf<SetNonNullableDeep<{[x: string]: any; a: number | null; b: {c: number | null}}, 'a' | 'b.c'>>().toBe<{[x: string]: any; a: number; b: {c: number}}>();
+
+// Works with `KeyPaths` containing template literals
+expectTypeOf<SetNonNullableDeep<{a: number | null; b: {c: number | null} | {d: number | undefined} | null | undefined}, `b.${'c' | 'd'}`>>().toBe<{a: number | null; b: {c: number} | {d: number} | null | undefined}>();
+expectTypeOf<SetNonNullableDeep<
+	{a: number | undefined; b: null | {readonly c: {1: number[] | undefined} | undefined} | {d: {1: number[] | undefined} | null}}, 'a' | `b.${'c' | 'd'}.1`
+>>().toBe<{a: number; b: null | {readonly c: {1: number[]} | undefined} | {d: {1: number[]} | null}}>();
+
+// Non recursive types
+expectTypeOf<SetNonNullableDeep<{a: Set<number | null> | {b: null}}, 'a.b'>>().toBe<{a: Set<number | null> | {b: never}}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: Map<string, string> | {c: string} | null}}, 'a.b'>>().toBe<{a: {b: Map<string, string> | {c: string}}}>();
+
+// === Arrays ===
+expectTypeOf<SetNonNullableDeep<[string | null, number | null, boolean | undefined], '0' | '2'>>().toBe<[string, number | null, boolean]>();
+expectTypeOf<SetNonNullableDeep<{a?: [string | undefined, number | undefined, (boolean | null)?] | null}, 'a.0' | 'a.1'>>().toBe<{a?: [string, number, (boolean | null)?] | null}>();
+expectTypeOf<SetNonNullableDeep<{a?: [string | null, (number | undefined)?, (boolean | null)?] | null}, 'a.1' | 'a.2'>>().toBe<{a?: [string | null, number?, boolean?] | null}>();
+expectTypeOf<SetNonNullableDeep<{a: readonly [string, number | undefined, (boolean | null)?]}, 'a.1'>>().toBe<{a: readonly [string, number, (boolean | null)?]}>();
+expectTypeOf<SetNonNullableDeep<{readonly a: [string | null, number | null | undefined, boolean | undefined, ...Array<number | null>]}, 'a.0' | 'a.2'>>().toBe<{readonly a: [string, number | null | undefined, boolean, ...Array<number | null>]}>();
+expectTypeOf<SetNonNullableDeep<{readonly a?: [string, number | null, boolean | undefined, ...Array<string | null>] | undefined}, 'a' | 'a.1' | 'a.2'>>().toBe<{readonly a?: [string, number, boolean, ...Array<string | null>]}>();
+
+// Readonly arrays
+expectTypeOf<SetNonNullableDeep<{a?: {b?: readonly [(string | number | null)?]} | null}, 'a.b.0'>>().toBe<{a?: {b?: readonly [(string | number)?]} | null}>();
+expectTypeOf<SetNonNullableDeep<{a: readonly [string | null, number | undefined, boolean | null, ...Array<string | undefined>] | undefined}, 'a.0' | 'a.1' | 'a.2'>>().toBe<{a: readonly [string, number, boolean, ...Array<string | undefined>] | undefined}>();
+
+// Ignores `Keys` that are already non-nullable
+expectTypeOf<SetNonNullableDeep<{a: [string, (number | null)?, boolean?]}, 'a.0'>>().toBe<{a: [string, (number | null)?, boolean?]}>();
+expectTypeOf<SetNonNullableDeep<{a: [string, (number | null)?, boolean?]}, 'a.0' | 'a.1'>>().toBe<{a: [string, number?, boolean?]}>();
+
+// A key past the elements a tuple declares lands in its rest element, which is the type of every index from there on, so it does reach it and the rest element is made non-nullable.
+expectTypeOf<SetNonNullableDeep<{a?: readonly [string | null, (number | undefined)?, (boolean | null)?, ...Array<number | null | undefined>] | undefined}, 'a.10'>>().toBe<{a?: readonly [string | null, (number | undefined)?, (boolean | null)?, ...number[]] | undefined}>();
+
+// A key that is one of the elements the tuple declares changes only that element, and an optional element keeps the `undefined` its `?` contributes.
+expectTypeOf<SetNonNullableDeep<{a?: readonly [string | null, (number | undefined)?, (boolean | null)?, ...Array<number | null | undefined>] | undefined}, 'a.0'>>().toBe<{a?: readonly [string, (number | undefined)?, (boolean | null)?, ...Array<number | null | undefined>] | undefined}>();
+
+// Unions of arrays
+expectTypeOf<SetNonNullableDeep<
+	{a: [string | undefined] | [string | null, number?, (boolean | null)?, ...Array<number | null>] | readonly [string | null | undefined, number | null, (boolean | undefined)?]},
+	'a.0' | 'a.1'
+>>().toBe<{a: [string] | [string, number?, (boolean | null)?, ...Array<number | null>] | readonly [string, number, (boolean | undefined)?]}>();
+
+// Labelled tuples
+expectTypeOf<SetNonNullableDeep<{a?: [b: string | null, c: number | undefined] | undefined}, 'a.0' | 'a.1'>>().toBe<{a?: [b: string, c: number] | undefined}>();
+
+// Non-tuple arrays
+expectTypeOf<SetNonNullableDeep<{a: Array<string | null>}, `a.${number}`>>().toBe<{a: string[]}>();
+expectTypeOf<SetNonNullableDeep<{readonly a: ReadonlyArray<string | number | null> | undefined}, 'a' | `a.${number}`>>().toBe<{readonly a: ReadonlyArray<string | number>}>();
+
+// Nested arrays
+expectTypeOf<SetNonNullableDeep<{a?: [([(string | undefined)?, (number | null)?] | null)?] | undefined}, 'a' | 'a.0.0'>>().toBe<{a?: [([string?, (number | null)?] | null)?]}>();
+expectTypeOf<SetNonNullableDeep<{a?: [([(string | undefined)?, (number | null)?] | null)?] | undefined}, 'a.0.1' | 'a.0'>>().toBe<{a?: [[(string | undefined)?, number?]?] | undefined}>();
+expectTypeOf<SetNonNullableDeep<{a?: [([string | null, number | undefined] | null)?] | null}, 'a.0' | 'a.0.1'>>().toBe<{a?: [[string | null, number]?] | null}>();
+expectTypeOf<SetNonNullableDeep<{a?: Array<[string | null, (number | undefined)?]> | null}, `a.${number}.1`>>().toBe<{a?: Array<[string | null, number?]> | null}>();
+
+// Removes `null` & `undefined` from keys inside arrays
+expectTypeOf<SetNonNullableDeep<{a?: Array<{b: number | null}> | undefined}, `a.${number}.b`>>().toBe<{a?: Array<{b: number}> | undefined}>();
+expectTypeOf<SetNonNullableDeep<{readonly a?: [{readonly b: number | undefined}] | null}, 'a' | 'a.0' | 'a.0.b'>>().toBe<{readonly a?: [{readonly b: number}]}>();
+expectTypeOf<SetNonNullableDeep<{readonly a: [{readonly b: number | null | undefined}, ({c?: string | null} | undefined)?]}, 'a.0.b' | 'a.1'>>().toBe<{readonly a: [{readonly b: number}, {c?: string | null}?]}>();
+expectTypeOf<SetNonNullableDeep<{a?: Array<{b: number | undefined; c?: string | null}> | null}, `a.${number}.b`>>().toBe<{a?: Array<{b: number; c?: string | null}> | null}>();
+expectTypeOf<SetNonNullableDeep<{a: [{b?: number | null; readonly c: string | undefined}]}, 'a.0.c'>>().toBe<{a: [{b?: number | null; readonly c: string}]}>();
+
+// Known limitation: an index path into a tuple with a leading rest element does nothing, because the element after the rest element is keyed by a number the walk does not reach. See the docs.
+declare const leadingRestTuple: SetNonNullableDeep<{a: [...string[], number | null]}, 'a.1'>;
+expectTypeOf(leadingRestTuple).toBe<{a: [...string[], number | null]}>();
+
+// Naming one path leaves the other properties of the same object alone, and a property that was optional stays optional.
+declare const oneOfTwoPaths: SetNonNullableDeep<{a: {b: string | null; c?: number | null}}, 'a.b'>;
+expectTypeOf(oneOfTwoPaths).toBe<{a: {b: string; c?: number | null}}>();
+
+declare const theOtherPath: SetNonNullableDeep<{a: {b: string | null; c?: number | null}}, 'a.c'>;
+expectTypeOf(theOtherPath).toBe<{a: {b: string | null; c?: number}}>();
+
+// Naming every path applies the transform to all of them.
+declare const everyPath: SetNonNullableDeep<{a: {b: string | null}}, Paths<{a: {b: string | null}}>>;
+expectTypeOf(everyPath).toBe<{a: {b: string}}>();
+
+// Naming no path applies it to none, which is what a `Set*` type means. `any` is the way to name every path without spelling them out.
+declare const noPath: SetNonNullableDeep<{a: {b: string | null}}, never>;
+expectTypeOf(noPath).toBe<{a: {b: string | null}}>();
+
+declare const anyPath: SetNonNullableDeep<{a: {b: string | null}}, any>;
+expectTypeOf(anyPath).toBe<{a: {b: string}}>();
+
+// A path deeper than `Paths` lists by default is accepted, and a missing path is ignored.
+type DeepNullable = {a: {b: {c: {d: {e: {f: {g: {h: 1 | null}}}}}}}};
+expectTypeOf<SetNonNullableDeep<DeepNullable, 'a.b.c.d.e.f.g.h'>>().toBe<{a: {b: {c: {d: {e: {f: {g: {h: 1}}}}}}}}>();
+expectTypeOf<SetNonNullableDeep<{a: number | null; b: {c: number | null}}, 'b.c' | 'missing' | 'b.missing'>>().toBe<{a: number | null; b: {c: number}}>();
+expectTypeOf<SetNonNullableDeep<{a: number | null}, 'missing'>>().toBe<{a: number | null}>();
+
+// A non-literal path segment matches every key at its level, like a path through an index signature.
+expectTypeOf<SetNonNullableDeep<{a: number | null; b: {c: number | null}}, string>>().toBe<{a: number; b: {c: number | null}}>();
+expectTypeOf<SetNonNullableDeep<{a: number | null; b: {c: number | null}}, `b.${string}`>>().toBe<{a: number | null; b: {c: number}}>();
+
+// `Paths<T>` is a valid path for a generic `T`, even though autocomplete only lists paths up to `a.b.c`.
+type SetNonNullableDeepAllPaths<T> = SetNonNullableDeep<T, Paths<T>>;
+expectTypeOf<SetNonNullableDeepAllPaths<{a: {b: 1 | null} | null}>>().toBe<{a: {b: 1}}>();
+
+// A number path reads the same index as its string form, also for a generic `Index`. A number that is not a path is ignored, like a string that is not a path. A wide `number` matches every index, like `${number}`.
+type SetNonNullableDeepIndex<T, Index extends number> = SetNonNullableDeep<T, Index>;
+expectTypeOf<SetNonNullableDeepIndex<[1 | null, 2 | null], 1>>().toBe<[1 | null, 2]>();
+expectTypeOf<SetNonNullableDeep<{a: 1 | null}, 5>>().toBe<{a: 1 | null}>();
+expectTypeOf<SetNonNullableDeep<[1 | null, 2 | null], -1 | 1.5>>().toBe<[1 | null, 2 | null]>();
+expectTypeOf<SetNonNullableDeepIndex<[1 | null, 2 | null], number>>().toBe<[1, 2]>();
+
+// Autocomplete only lists paths up to `a.b.c`, so a type with very many deeper paths does not make the union of paths too complex to represent.
+type Level<Value> = Record<DigitCharacter, Value>;
+type ManyPaths = Level<Level<Level<Level<Level<Level<1 | null>>>>>>;
+expectTypeOf<SetNonNullableDeep<ManyPaths, '0.0.0.0.0.0'>['0']['0']['0']['0']['0']['0']>().toBe<1>();
+
+// A numeric terminal path also names a property declared with its string spelling.
+expectTypeOf<SetNonNullableDeep<{'0': string | null}, 0>>().toBe<{'0': string}>();
+
+// Key aliases preserve modifiers and transform only the selected property.
+expectTypeOf<SetNonNullableDeep<{readonly '0'?: string | null | undefined; other?: number}, 0>>().toBe<{readonly '0'?: string; other?: number}>();
+expectTypeOf<SetNonNullableDeep<{'-2'?: string | null | undefined; '1.5'?: string | null | undefined}, -2 | 1.5>>().toBe<{'-2'?: string; '1.5'?: string}>();
+expectTypeOf<SetNonNullableDeep<{'0'?: string | null | undefined; '00'?: string | null | undefined}, 0>>().toBe<{'0'?: string; '00'?: string | null | undefined}>();
+expectTypeOf<SetNonNullableDeep<{'0'?: string | null | undefined}, 9>>().toBe<{'0'?: string | null | undefined}>();
+expectTypeOf<SetNonNullableDeep<{'0'?: string | null | undefined} | {other: number}, 0>>().toBe<{'0'?: string} | {other: number}>();
+expectTypeOf<SetNonNullableDeep<{'0'?: any; '1'?: unknown; '2'?: never}, 0 | 1 | 2>>().toBe<{'0'?: any; '1'?: {}; '2'?: never}>();
+expectTypeOf<SetNonNullableDeep<{'0'?: string | null | undefined; nested: {'1'?: string | null | undefined}}, 0 | 'nested.1'>>().toBe<{'0'?: string; nested: {'1'?: string}}>();
+
+// Broad numeric paths use the same template matching as `${number}`, including numeric-looking string keys.
+expectTypeOf<SetNonNullableDeep<{'0': string | null; '01': number | null; other: boolean | null}, number>>().toBe<{'0': string; '01': number; other: boolean | null}>();
+
+// Branded paths identify the same nested property as their underlying strings.
+expectTypeOf<SetNonNullableDeep<{user: {name: string | null}}, Tagged<'user.name', 'Path'>>>().toBe<{user: {name: string}}>();
+
+// Normalize the path only, preserving brands on property values and all unrelated modifiers.
+type NullableBrandedUser = {readonly user?: {readonly name?: Tagged<string, 'Name'> | null; age: number | null}; other: boolean | null};
+expectTypeOf<SetNonNullableDeep<NullableBrandedUser, Tagged<'user.name', 'Path'>>>()
+	.toBe<{readonly user?: {readonly name?: Tagged<string, 'Name'>; age: number | null}; other: boolean | null}>();
+expectTypeOf<SetNonNullableDeep<{a: string | null}, Opaque<'a', 'Path'>>>().toBe<{a: string}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: number | null}}, Tagged<Tagged<'a.b', 'Inner'>, 'Outer'>>>().toBe<{a: {b: number}}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: number | null}}, 'a.b' & {readonly pathBrand: unique symbol}>>().toBe<{a: {b: number}}>();
+
+// A union of paths applies every selection, rather than producing a union of partially transformed objects.
+type NullablePathUnion = {a: string | null; b: {c: number | null; d: boolean | null}};
+expectTypeOf<SetNonNullableDeep<NullablePathUnion, Tagged<'a' | 'b.c', 'Path'>>>()
+	.toBe<{a: string; b: {c: number; d: boolean | null}}>();
+expectTypeOf<SetNonNullableDeep<NullablePathUnion, Tagged<'a', 'Path'> | 'b.c'>>()
+	.toBe<{a: string; b: {c: number; d: boolean | null}}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: string | null} | null}, Tagged<'a' | 'a.b', 'Path'>>>().toBe<{a: {b: string}}>();
+expectTypeOf<SetNonNullableDeep<{a: string | null} | {a?: number | null}, Tagged<'a', 'Path'>>>().toBe<{a: string} | {a?: number}>();
+
+// Numeric paths retain the distinction between a decimal property and a dotted string path.
+expectTypeOf<SetNonNullableDeep<{'0': string | null}, Tagged<0, 'Index'>>>().toBe<{'0': string}>();
+type NullableDecimalKeys = {1.2: string | null; 1: {2: number | null}};
+expectTypeOf<SetNonNullableDeep<NullableDecimalKeys, Tagged<1.2, 'Index'>>>().toBe<{1.2: string; 1: {2: number | null}}>();
+expectTypeOf<SetNonNullableDeep<NullableDecimalKeys, Tagged<'1.2', 'Path'>>>().toBe<{1.2: string | null; 1: {2: number}}>();
+expectTypeOf<SetNonNullableDeep<readonly [string | null, (number | null)?], Tagged<0 | 1, 'Index'>>>().toBe<readonly [string, number?]>();
+expectTypeOf<SetNonNullableDeep<{items: Array<{name: string | null}>}, Tagged<`items.${number}.name`, 'Path'>>>()
+	.toBe<{items: Array<{name: string}>}>();
+
+// Broad path segments and missing paths keep the same meaning after unwrapping.
+expectTypeOf<SetNonNullableDeep<{a: string | null; b: {c: number | null}}, Tagged<string, 'Path'>>>()
+	.toBe<{a: string; b: {c: number | null}}>();
+expectTypeOf<SetNonNullableDeep<{a: {b: string | null; c: number | null}}, Tagged<`a.${string}`, 'Path'>>>()
+	.toBe<{a: {b: string; c: number}}>();
+expectTypeOf<SetNonNullableDeep<{a: string | null}, Tagged<'missing', 'Path'>>>().toBe<{a: string | null}>();
+
+expectTypeOf<SetNonNullableDeep<{a: any; b: never; c: unknown}, Tagged<'a' | 'b' | 'c', 'Path'>>>().toBe<{a: any; b: never; c: {}}>();
+expectTypeOf<SetNonNullableDeep<any, Tagged<'a.b', 'Path'>>>().toBe<any>();
+expectTypeOf<SetNonNullableDeep<never, Tagged<'a.b', 'Path'>>>().toBe<never>();
+expectTypeOf<SetNonNullableDeep<unknown, never>>().toBe<unknown>();
+// @ts-expect-error A path must be a string or number, even when its source is unknown.
+type UnknownBrandedPath = SetNonNullableDeep<{a: string | null}, unknown>;
+
+// A wide autocomplete alternative must not erase the known nested selection.
+expectTypeOf<SetNonNullableDeep<{a: {b: string | null; c?: number}; d?: string}, LiteralUnion<'a.b', string>>>().toBe<{a: {b: string; c?: number}; d?: string}>();
+
+// Selecting many configuration fields must not build a chain of one transformed object per path.
+type ConfigurationGroups = `group${0 | 1 | 2 | 3 | 4}`;
+type ConfigurationFields = `field${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`;
+type ManyNullableFields = Record<ConfigurationGroups, Record<ConfigurationFields, {value: string | null; untouched: number | null}>>;
+declare const cleanedConfiguration: SetNonNullableDeep<ManyNullableFields, `${ConfigurationGroups}.${ConfigurationFields}.value`>;
+expectTypeOf(cleanedConfiguration.group4.field9.value).toBe<string>();
+expectTypeOf(cleanedConfiguration.group4.field9.untouched).toBe<number | null>();
+
+// Grouped paths preserve generic value reads and an unselected value's identity.
+function _readSelectedValue<Value>(value: SetNonNullableDeep<{user: {name: Value | null} | null; kept: Value}, 'user' | 'user.name'>): NonNullable<Value> {
+	return value.user.name;
+}
+
+function _keepWithoutPaths<Value>(value: Value): SetNonNullableDeep<Value, never> {
+	return value;
+}
+
+declare function cleanFields<const Value, Path extends string | number>(value: Value, path: Path): SetNonNullableDeep<Value, Path>;
+expectTypeOf(cleanFields({user: {name: null as string | null, age: null as number | null}}, 'user.name' as 'user.name' | 'user.age'))
+	.toBe<{readonly user: {readonly name: string; readonly age: number}}>();
+
+// A descendant-only path keeps a tuple's extra declared properties while changing its selected value.
+type LabelledNullableRows = [{name: string | null; kept: number | null}] & {readonly label: 'rows'};
+const labelledRows = Object.assign([{name: 'first', kept: null}] as [{name: string; kept: number | null}], {label: 'rows' as const});
+const cleanedRows: SetNonNullableDeep<{rows: LabelledNullableRows}, 'rows.0.name'> = {rows: labelledRows};
+expectTypeOf(cleanedRows.rows.label).toBe<'rows'>();
+expectTypeOf(cleanedRows.rows[0].name).toBe<string>();
+// @ts-expect-error An unrelated readonly property keeps its modifier.
+cleanedRows.rows.label = 'rows';
+
+// Finite selections through a recursive configuration keep unselected nullable properties.
+type NullableConfigurationTree = {readonly value: string | null; next: NullableConfigurationTree | null; children: NullableConfigurationTree[]};
+const cleanedTree: SetNonNullableDeep<NullableConfigurationTree, 'next.value' | `children.${number}.value`> = {
+	value: null,
+	next: {value: 'next', next: null, children: []},
+	children: [{value: 'child', next: null, children: []}],
+};
+expectTypeOf(cleanedTree.value).toBe<string | null>();
+expectTypeOf(cleanedTree.next?.value).toBe<string | undefined>();
+expectTypeOf(cleanedTree.children.at(0)?.value).toBe<string | undefined>();
+
+// Check every selected branch, not only the field whose read triggered the original depth error.
+expectTypeOf(cleanedConfiguration).toBe<Record<ConfigurationGroups, Record<ConfigurationFields, {value: string; untouched: number | null}>>>();
+cleanedRows.rows[0].kept = null;
+// @ts-expect-error A selected tuple descendant cannot be assigned null again.
+cleanedRows.rows[0].name = null;
+// @ts-expect-error Every selected recursive-array element must have a non-nullable value.
+cleanedTree.children.push({value: null, next: null, children: []});
+
+// Narrowing a declared descendant leaves unrelated dynamic rows nullable.
+type IndexedNullableRows = {[key: string]: {id: number | null}; known: {id: number | null}};
+const nonNullableKnownRow: SetNonNullableDeep<IndexedNullableRows, 'known.id'> = {known: {id: 1}, dynamic: {id: null}};
+expectTypeOf(nonNullableKnownRow.known.id).toBe<number>();
+expectTypeOf<SetNonNullableDeep<IndexedNullableRows, 'known.id'>[string]>().toBe<{id: number | null}>();
+
+// Declared numeric and pattern keys narrow independently of their covering signature.
+type NumericNullableRows = {[key: number]: {id: number | null}; 0: {id: number | null}};
+const nonNullableNumericRow: SetNonNullableDeep<NumericNullableRows, '0.id'> = {0: {id: 1}, 1: {id: null}};
+expectTypeOf(nonNullableNumericRow[0].id).toBe<number>();
+expectTypeOf<SetNonNullableDeep<NumericNullableRows, '0.id'>[number]>().toBe<{id: number | null}>();
+type PatternNullableRows = {[key: `item${string}`]: {id: number | null}; readonly itemKnown: {readonly id: number | null}};
+const nonNullablePatternRow: SetNonNullableDeep<PatternNullableRows, 'itemKnown.id'> = {itemKnown: {id: 1}, itemOther: {id: null}};
+expectTypeOf(nonNullablePatternRow.itemKnown.id).toBe<number>();
+// @ts-expect-error A selected descendant keeps its original readonly modifier.
+nonNullablePatternRow.itemKnown.id = 1;
+// @ts-expect-error Only the declared selected descendant must reject null.
+const nullKnown: SetNonNullableDeep<IndexedNullableRows, 'known.id'> = {known: {id: null}, dynamic: {id: null}};
+
+function cleanDeclaredRow<Value>(id: NonNullable<Value>): SetNonNullableDeep<{[key: string]: {id: Value | null}; known: {id: Value | null}}, 'known.id'> {
+	return {known: {id}, dynamic: {id: null}};
+}
+
+expectTypeOf(cleanDeclaredRow<string>('selected').known.id).toBe<string>();
+expectTypeOf<SetNonNullableDeep<Record<string, {id: number | null}>, 'dynamic.id'>[string]>().toBe<{id: number}>();
+
+// Enum declarations use the same printed property name as a string path.
+enum DeclaredRowKey {
+	Known = 'known',
+}
+const enumDeclaredRow: SetNonNullableDeep<{[key: string]: {id: number | null}; [DeclaredRowKey.Known]: {id: number | null}}, 'known.id'> = {known: {id: 1}, dynamic: {id: null}};
+expectTypeOf(enumDeclaredRow.known.id).toBe<number>();
+
+// A terminal path matches an enum key by its printed name, and an enum path matches a declared key.
+enum TerminalEnumKey {
+	Known = 'known',
+}
+expectTypeOf<SetNonNullableDeep<{[TerminalEnumKey.Known]: number | null; other: number | null}, 'known'>>().toBe<{[TerminalEnumKey.Known]: number; other: number | null}>();
+expectTypeOf<SetNonNullableDeep<{known: number | null; other: number | null}, TerminalEnumKey.Known>>().toBe<{known: number; other: number | null}>();
+
+// A numeric path that a `number` index signature covers leaves the index signature unchanged.
+enum TerminalNumericEnumKey {
+	Zero,
+	One,
+}
+expectTypeOf<SetNonNullableDeep<{[key: number]: string | null; [TerminalNumericEnumKey.One]: string | null; a: string | null}, 1>>().toBe<{[key: number]: string | null; [TerminalNumericEnumKey.One]: string; a: string | null}>();
+expectTypeOf<SetNonNullableDeep<{[key: number]: string | null; 1: string | null; a: string | null}, TerminalNumericEnumKey.One>>().toBe<{[key: number]: string | null; 1: string; a: string | null}>();
+expectTypeOf<SetNonNullableDeep<Array<string | null>, TerminalNumericEnumKey.Zero>>().toBe<Array<string | null>>();
+
+// A noncanonical numeric segment, such as `01`, does not name an array index or a number key, but it is still a string key.
+expectTypeOf<SetNonNullableDeep<{a: Array<{id: number | null}>}, 'a.01.id'>>().toBe<{a: Array<{id: number | null}>}>();
+expectTypeOf<SetNonNullableDeep<{a: [{id: number | null}, {id: number | null}]}, 'a.01.id'>>().toBe<{a: [{id: number | null}, {id: number | null}]}>();
+expectTypeOf<SetNonNullableDeep<{[key: number]: {id: number | null}}, '01.id'>>().toBe<{[key: number]: {id: number | null}}>();
+expectTypeOf<SetNonNullableDeep<{[key: string]: {id: number | null}}, '01.id'>[string]>().toBe<{id: number}>();
+expectTypeOf<SetNonNullableDeep<{a: Array<{id: number | null}>}, 'a.1.id'>>().toBe<{a: Array<{id: number}>}>();
+
+// A tuple path removes null from a generic field without losing its selected value.
+function nonNullableTupleValue<Value>(id: NonNullable<Value>): SetNonNullableDeep<readonly [{id: Value | null}], '0.id'> {
+	return [{id}];
+}
+
+function readNonNullableTupleValue<Value>(value: SetNonNullableDeep<readonly [{id: Value | null}], '0.id'>): NonNullable<Value> {
+	return value[0].id;
+}
+
+expectTypeOf(readNonNullableTupleValue(nonNullableTupleValue<'ready' | null>('ready'))).toBe<'ready'>();
+
+const nonNullableTuple = nonNullableTupleValue<string | null>('ready');
+expectTypeOf(nonNullableTuple[0].id).toBe<string>();
+// @ts-expect-error A valid non-nullable element cannot replace an element of a readonly tuple.
+nonNullableTuple[0] = {id: 'ready'};
+
+// Cleaning a container and its child together preserves optionality and unrelated nullable values.
+type CleanedContainer = SetNonNullableDeep<{
+	readonly child?: {readonly value: number | null; kept: string | null} | null | undefined;
+	other: undefined;
+}, 'child' | 'child.value'>;
+expectTypeOf<CleanedContainer>().toBe<{readonly child?: {readonly value: number; kept: string | null}; other: undefined}>();
+({other: undefined, child: {value: 1, kept: null}}) satisfies CleanedContainer;
+expectTypeOf<{other: undefined; child: undefined}>().not.toBeAssignableTo<CleanedContainer>();
+expectTypeOf<{other: undefined; child: {value: null; kept: null}}>().not.toBeAssignableTo<CleanedContainer>();
+declare const cleanedContainer: CleanedContainer;
+// @ts-expect-error The selected child retains its readonly field.
+cleanedContainer.child!.value = 1;
+
+expectTypeOf<SetNonNullableDeep<{first: {readonly id: number | null}; second: {id: string | undefined}}, `${string}.id`>>()
+	.toBe<{first: {readonly id: number}; second: {id: string}}>();
+
+declare const symbolBranch: unique symbol;
+expectTypeOf<SetNonNullableDeep<{a: {id: number | null}; [symbolBranch]: {id: string | null}}, `${string}.id`>>().toBe<{a: {id: number}; [symbolBranch]: {id: string | null}}>();
+expectTypeOf<SetNonNullableDeep<{0: {id: number | null}}, '00.id'>>().toBe<{0: {id: number | null}}>();
+expectTypeOf<SetNonNullableDeep<{[key: `item${string}`]: {id: number | null}}, `${string}.id`>>().toBe<{[key: `item${string}`]: {id: number}}>();
+expectTypeOf<SetNonNullableDeep<{a?: {child: {id?: number | null}}} | undefined, `${string}.${string}.id`>>().toBe<{a?: {child: {id?: number}}} | undefined>();
+expectTypeOf<SetNonNullableDeep<{rows: readonly [{id: number | null}, {id?: string | undefined}]}, `rows.${number}.id`>>().toBe<{rows: readonly [{id: number}, {id?: string}]}>();

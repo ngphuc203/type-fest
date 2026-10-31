@@ -1,0 +1,358 @@
+import {expectTypeOf} from 'nz';
+import type {ObjectMerge} from '../source/object-merge.d.ts';
+import type {Tagged} from '../source/tagged.d.ts';
+
+declare const sym: unique symbol;
+
+// === Simple cases ===
+expectTypeOf<ObjectMerge<{a: number}, {b: string}>>().toBe<{a: number; b: string}>();
+expectTypeOf<ObjectMerge<{a: number}, {a: string}>>().toBe<{a: string}>();
+expectTypeOf<ObjectMerge<{a: number}, {a: string; b: boolean}>>().toBe<{a: string; b: boolean}>();
+expectTypeOf<ObjectMerge<{a: number; b: boolean}, {a: string}>>().toBe<{a: string; b: boolean}>();
+expectTypeOf<ObjectMerge<{a: number; b: string}, {a: string; c: number}>>().toBe<{a: string; b: string; c: number}>();
+expectTypeOf<ObjectMerge<{}, {a: string; b: boolean}>>().toBe<{a: string; b: boolean}>();
+expectTypeOf<ObjectMerge<{a: string; b: boolean}, {}>>().toBe<{a: string; b: boolean}>();
+
+// === Optional properties ===
+// Optional in second
+expectTypeOf<ObjectMerge<{a: number; b: number}, {a?: string; c: boolean}>>().toBe<{a: number | string; b: number; c: boolean}>();
+// Optional in first
+expectTypeOf<ObjectMerge<{a?: number; b: number}, {a: string; c: boolean}>>().toBe<{a: string; b: number; c: boolean}>();
+// Optional in both
+expectTypeOf<ObjectMerge<{a?: number; b: number}, {a?: string; c: boolean}>>().toBe<{a?: number | string; b: number; c: boolean}>();
+// Optionality preserved for non-overlapping keys
+expectTypeOf<ObjectMerge<{a: number; b?: number}, {a: string; c?: string}>>().toBe<{a: string; b?: number; c?: string}>();
+// Mix
+expectTypeOf<ObjectMerge<
+	{a?: number; b: string; c?: number; d: boolean; e?: bigint},
+	{a?: string; b?: number; c: string; f: boolean; g?: bigint}
+>>().toBe<{a?: number | string; b: string | number; c: string; d: boolean; e?: bigint; f: boolean; g?: bigint}>();
+
+// === Readonly properties ===
+// Readonly in second
+expectTypeOf<ObjectMerge<{a: number; b: number}, {readonly a: string; c: boolean}>>().toBe<{a: string; b: number; c: boolean}>();
+expectTypeOf<ObjectMerge<{a: string}, {readonly [x: string]: number}>>().toBe<{[x: string]: number | string; a: string | number}>();
+// Readonly in first
+expectTypeOf<ObjectMerge<{readonly a: number; b: number}, {a: string; c: boolean}>>().toBe<{a: string; b: number; c: boolean}>();
+expectTypeOf<ObjectMerge<{readonly [x: string]: number}, {b: string}>>().toBe<{[x: string]: number | string; b: string}>();
+// Readonly in both
+expectTypeOf<ObjectMerge<{readonly a: number; b: number}, {readonly a: string; c: boolean}>>().toBe<{a: string; b: number; c: boolean}>();
+expectTypeOf<ObjectMerge<{readonly [x: string]: number; b: number}, {readonly [x: string]: string; c: string}>>().toBe<{[x: string]: number | string; b: number | string; c: string}>();
+// Readonly is not preserved even for non-overlapping keys
+expectTypeOf<ObjectMerge<{a: number; readonly b: number}, {a: string; readonly c: string}>>().toBe<{a: string; b: number; c: string}>();
+expectTypeOf<ObjectMerge<{readonly [x: string]: string}, {readonly [x: symbol]: number}>>().toBe<{[x: string]: string; [x: symbol]: number}>();
+// Mix
+expectTypeOf<ObjectMerge<
+	{readonly a: number; b: string; readonly c: number; d: boolean; readonly e: bigint},
+	{readonly a: string; readonly b: number; c: string; f: boolean; readonly g: bigint}
+>>().toBe<{a: string; b: number; c: string; d: boolean; e: bigint; f: boolean; g: bigint}>();
+
+// === Optional and readonly properties ===
+expectTypeOf<ObjectMerge<{a?: number; readonly b: number}, {readonly a: string; b?: string}>>().toBe<{a: string; b: number | string}>();
+expectTypeOf<ObjectMerge<{readonly [x: string]: number; [sym]: string}, {[x: symbol]: number; a?: string}>>().toBe<{[x: string]: string | number; [x: symbol]: number | string; [sym]: string | number; a?: string | number}>();
+expectTypeOf<ObjectMerge<
+	{readonly a?: number; b: string; readonly c?: number; d: boolean; readonly e?: bigint},
+	{readonly a?: string; readonly b?: number; c: string; f: boolean; readonly g?: bigint}
+>>().toBe<{a?: number | string; b: string | number; c: string; d: boolean; e?: bigint; f: boolean; g?: bigint}>();
+
+// === Index signatures ===
+// Index signature in second
+expectTypeOf<ObjectMerge<{a: string; b: boolean}, {[x: string]: number; b: 1; c: 2}>>().toBe<{[x: string]: string | number; a: string | number; b: 1; c: 2}>();
+expectTypeOf<ObjectMerge<
+	{isLoading: 'y' | 'n'; isOpen: 'y' | 'n'; foo: string; bar: number},
+	{[x: `is${string}`]: boolean}
+>>().toBe<
+	{[x: `is${string}`]: boolean | 'y' | 'n'; isLoading: boolean | 'y' | 'n'; isOpen: boolean | 'y' | 'n'; foo: string; bar: number}>();
+// Index signature in first
+expectTypeOf<ObjectMerge<{[x: string]: number; a: 1; b: 2}, {a: string; c: boolean}>>().toBe<{[x: string]: number | string | boolean; a: string; b: 2; c: boolean}>();
+expectTypeOf<ObjectMerge<
+	{[x: `is${string}`]: boolean},
+	{isLoading: 'y' | 'n'; isOpen: 'y' | 'n'; foo: string; bar: number}
+>>().toBe<
+	{[x: `is${string}`]: boolean | 'y' | 'n'; isLoading: 'y' | 'n'; isOpen: 'y' | 'n'; foo: string; bar: number}>();
+// Index signature in both
+expectTypeOf<ObjectMerge<{[x: string]: number; [sym]: boolean; a: 1; b: 2}, {[x: string]: string; b: 'b'; c: 'c'}>>().toBe<{[x: string]: number | string; [sym]: boolean; a: 1 | string; b: 'b'; c: 'c'}>();
+// Multiple index signatures
+expectTypeOf<ObjectMerge<
+	{onChange: string[]; handleClick: number[]},
+	{[x: `on${string}`]: string; [x: `handle${string}`]: number}
+>>().toBe<
+	{[x: `on${string}`]: string | string[]; [x: `handle${string}`]: number | number[]; onChange: string | string[]; handleClick: number | number[]}>();
+expectTypeOf<ObjectMerge<
+	{[x: `on${string}`]: string; [x: `handle${string}`]: number},
+	{onChange: string[]; handleClick: number[]}
+>>().toBe<
+	{[x: `on${string}`]: string | string[]; [x: `handle${string}`]: number | number[]; onChange: string[]; handleClick: number[]}>();
+expectTypeOf<ObjectMerge<
+	{[x: string]: string; [x: symbol]: number},
+	{[x: number]: boolean; [x: `is${string}`]: bigint}
+>>().toBe<
+	{[x: string]: string | boolean | bigint; [x: symbol]: number; [x: number]: string | boolean; [x: `is${string}`]: bigint | string}>();
+// Indexor in `First` is same as in `Second`
+expectTypeOf<ObjectMerge<{[x: string]: string}, {[x: string]: number}>>().toBe<{[x: string]: string | number}>();
+expectTypeOf<ObjectMerge<{[x: `${number}`]: number}, {[x: number]: string}>>().toBe<{[x: `${number}`]: number | string; [x: number]: string | number}>();
+// Indexor in `First` is supertype of indexor in `Second`
+expectTypeOf<ObjectMerge<{[x: string]: string}, {[x: Lowercase<string>]: number}>>().toBe<{[x: string]: string | number; [x: Lowercase<string>]: string | number}>();
+expectTypeOf<ObjectMerge<{[x: string]: number}, {[x: number]: string}>>().toBe<{[x: string]: number | string; [x: number]: string | number}>();
+expectTypeOf<ObjectMerge<{[x: string]: string}, {[x: `is${string}`]: boolean}>>().toBe<{[x: string]: string | boolean; [x: `is${string}`]: boolean | string}>();
+// Indexor in `First` is subtype of indexor in `Second`
+expectTypeOf<ObjectMerge<{[x: Lowercase<string>]: string}, {[x: string]: number}>>().toBe<{[x: string]: string | number; [x: Lowercase<string>]: string | number}>();
+expectTypeOf<ObjectMerge<{[x: number]: number}, {[x: string]: string}>>().toBe<{[x: number]: number | string; [x: string]: string | number}>();
+// No overlap b/w indexors
+expectTypeOf<ObjectMerge<{[x: symbol]: number}, {[x: number]: string}>>().toBe<{[x: symbol]: number; [x: number]: string}>();
+// Partial overlap b/w indexors
+expectTypeOf<ObjectMerge<{[x: Lowercase<string>]: number}, {[x: Uppercase<string>]: string}>>().toBe<{[x: Lowercase<string>]: string | number; [x: Uppercase<string>]: string | number}>();
+
+// === Index signatures and optional properties ===
+expectTypeOf<ObjectMerge<{a?: string}, {[x: string]: number}>>().toBe<{[x: string]: string | number; a?: string | number}>();
+expectTypeOf<ObjectMerge<{[x: string]: number}, {a?: string}>>().toBe<{[x: string]: string | number; a?: string | number}>();
+expectTypeOf<ObjectMerge<{a: string}, {[x: string]: number; a?: number}>>().toBe<{[x: string]: number | string; a: number | string}>();
+expectTypeOf<ObjectMerge<{[x: string]: number; a?: number}, {a: string}>>().toBe<{[x: string]: number | string; a: string}>();
+expectTypeOf<ObjectMerge<{[x: string]: number; a?: number}, {a?: string}>>().toBe<{[x: string]: number | string; a?: number | string}>();
+
+// === Normalized keys cases ===
+// ===== Cases covering branch that handles literal keys of `Second` =====
+// String/number key overwrites corresponding number/string key
+expectTypeOf<ObjectMerge<{'0': number}, {0: string; 1: string}>>().toBe<{0: string; 1: string}>();
+expectTypeOf<ObjectMerge<{0?: number}, {'0': string; '1': string}>>().toBe<{'0': string; '1': string}>();
+expectTypeOf<ObjectMerge<{1.5: number}, {'1.50': string}>>().toBe<{1.5: number; '1.50': string}>();
+// String/number key with number/string index signature
+expectTypeOf<ObjectMerge<{[x: string]: number}, {0: string}>>().toBe<{[x: string]: number | string; 0: string}>();
+expectTypeOf<ObjectMerge<{[x: number]: number}, {'0': string}>>().toBe<{[x: number]: number | string; '0': string}>();
+// Optional number key with string index signature
+expectTypeOf<ObjectMerge<{[x: string]: number}, {0?: string}>>().toBe<{[x: string]: number | string; 0?: string | number}>();
+// Optional string key with number index signature
+// The `symbol` index signature is added because
+// `{[x: number]: number}[never]` yields `number` instead of `never`,
+// but if we add a `symbol` index signature to it, then
+// `{[x: number]: number; [x: symbol]: boolean}[never]` yields `never` as expected.
+expectTypeOf<ObjectMerge<{[x: number]: number; [x: symbol]: boolean}, {'0'?: string}>>().toBe<{[x: number]: number | string; [x: symbol]: boolean; '0'?: string | number}>();
+
+// ===== Cases covering branch that handles literal keys of `First` =====
+// String/number key from `First` doesn't show up in output if corresponding number/string key exists in `Second`
+expectTypeOf<ObjectMerge<{'0': number; '1': number}, {0: string}>>().toBe<{0: string; '1': number}>();
+expectTypeOf<ObjectMerge<{0: number; 1: number}, {'0': string}>>().toBe<{'0': string; 1: number}>();
+// Number/string key from `First` with string/number index signature in `Second`
+expectTypeOf<ObjectMerge<{0: number}, {[x: string]: string}>>().toBe<{[x: string]: string | number; 0: number | string}>();
+expectTypeOf<ObjectMerge<{'0': number}, {[x: number]: string; [x: symbol]: boolean}>>().toBe<{[x: number]: string | number; [x: symbol]: boolean; '0': number | string}>();
+
+// ===== Cases covering branch that handles non-literal keys of `Second` =====
+// String/number index signature in `Second` with number/string key in `First`
+expectTypeOf<ObjectMerge<{0: string}, {[x: string]: number}>>().toBe<{[x: string]: number | string; 0: string | number}>();
+expectTypeOf<ObjectMerge<{'0': string}, {[x: number]: number}>>().toBe<{[x: number]: number | string; '0': string | number}>();
+// Index signature in `Second` with overwritten key in `First`
+expectTypeOf<ObjectMerge<{[x: symbol]: boolean; '0': string}, {[x: string]: number; 0: 1 | 2 | 3}>>().toBe<{[x: string]: number; [x: symbol]: boolean; 0: 1 | 2 | 3}>();
+// Index signature in `Second` with non-overwritten key in `First`
+expectTypeOf<ObjectMerge<{0: string}, {[x: string]: number; '0'?: 1 | 2 | 3}>>().toBe<{[x: string]: number | string; 0: string | 1 | 2 | 3}>();
+
+// ===== Cases covering branch that handles non-literal keys of `First` =====
+// String/number index signature in `First` with number/string key in `Second`
+expectTypeOf<ObjectMerge<{[x: string]: number}, {0: string}>>().toBe<{[x: string]: number | string; 0: string}>();
+expectTypeOf<ObjectMerge<{[x: number]: number}, {'0': string}>>().toBe<{[x: number]: number | string; '0': string}>();
+
+// ===== Cases covering branch that handles optional keys of `Second` that are also present in `First` =====
+// Number/string optional key in `Second` with corresponding string/number key in `First`
+expectTypeOf<ObjectMerge<{'0': number}, {0?: string}>>().toBe<{'0': number | string}>();
+expectTypeOf<ObjectMerge<{0: number}, {'0'?: string}>>().toBe<{0: number | string}>();
+// Number/string optional key in `Second` with corresponding string/number optional key in `First`
+expectTypeOf<ObjectMerge<{'0'?: number}, {0?: string}>>().toBe<{'0'?: number | string}>();
+expectTypeOf<ObjectMerge<{0?: number}, {'0'?: string}>>().toBe<{0?: number | string}>();
+
+// ===== `readonly` on a member the merge touches never survives, because the result is a fresh object. A `readonly` one level down does survive, because that member is copied by reference. =====
+
+// A key only the second has keeps its own modifier minus `readonly`.
+expectTypeOf<ObjectMerge<{readonly a: string}, {readonly b: number}>>().toBe<{a: string; b: number}>();
+// A key on both sides takes the second's modifier, and `readonly` is dropped either way.
+expectTypeOf<ObjectMerge<{readonly a: string}, {a: number}>>().toBe<{a: number}>();
+expectTypeOf<ObjectMerge<{a: string}, {readonly a: number}>>().toBe<{a: number}>();
+expectTypeOf<ObjectMerge<{readonly a?: string}, {a?: number}>>().toBe<{a?: number | string}>();
+
+// One level down the member is copied whole, so its `readonly` is still there, which is what the runtime does as well.
+expectTypeOf<ObjectMerge<{a: {readonly b: string}}, {c: number}>>().toBe<{a: {readonly b: string}; c: number}>();
+
+// === Unions ===
+expectTypeOf<ObjectMerge<{a: string; b: string} | {c: string; d: string}, {a: number; c: number}>>().toBe<{a: number; b: string; c: number} | {a: number; c: number; d: string}>();
+expectTypeOf<ObjectMerge<{a: string; b: string}, {a: number} | {b: number}>>().toBe<{a: number; b: string} | {a: string; b: number}>();
+expectTypeOf<ObjectMerge<{a: string; b: string} | {c: string; d: string}, {a: number} | {c: number}>>().toBe<{a: number; b: string} | {a: string; b: string; c: number} | {c: number; d: string} | {a: number; c: string; d: string}>();
+
+// === Functions ===
+expectTypeOf<ObjectMerge<{a: string}, (a1: string, a2: number) => void>>().toBe<{a: string}>();
+expectTypeOf<ObjectMerge<{a: string}, {(a1: string, a2: number): void; a: number}>>().toBe<{a: number}>();
+expectTypeOf<ObjectMerge<() => string, {a: string}>>().toBe<{a: string}>();
+expectTypeOf<ObjectMerge<{(): string; a: number}, {a: string}>>().toBe<{a: string}>();
+
+// === Non-objects ===
+// @ts-expect-error
+type T1 = ObjectMerge<string, {a: string}>;
+// @ts-expect-error
+type T2 = ObjectMerge<{a: string}, number>;
+// @ts-expect-error
+type T3 = ObjectMerge<{a: string}, unknown>;
+// @ts-expect-error
+type T4 = ObjectMerge<unknown, {a: string}>;
+expectTypeOf<ObjectMerge<string[], {0: string}>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<{0: string}, string[]>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<string[], number[]>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<ReadonlyMap<string, number>, {a: string}>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<{a: string}, ReadonlyMap<string, number>>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<WeakMap<WeakKey, number>, {a: string}>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<{a: string}, WeakMap<WeakKey, number>>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<ReadonlySet<string>, {a: string}>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<{a: string}, ReadonlySet<string>>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<WeakSet<WeakKey>, {a: string}>>().toBe<unknown>();
+expectTypeOf<ObjectMerge<{a: string}, WeakSet<WeakKey>>>().toBe<unknown>();
+
+// === Boundary cases ===
+expectTypeOf<ObjectMerge<any, {a: string}>>().toBe<any>();
+expectTypeOf<ObjectMerge<{a: string}, any>>().toBe<any>();
+expectTypeOf<ObjectMerge<never, {a: string}>>().toBe<never>();
+expectTypeOf<ObjectMerge<{a: string}, never>>().toBe<never>();
+expectTypeOf<ObjectMerge<any, never>>().toBe<never>();
+expectTypeOf<ObjectMerge<never, any>>().toBe<never>();
+
+// Computed string-enum keys refer to the same runtime property as their string values.
+enum MergePropertyKey {
+	Value = 'value',
+}
+
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]: 2}>>().toBe<{value: 2}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]?: 2}>>().toBe<{value: 1 | 2}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]?: 2 | undefined}>>().toBe<{value: 1 | 2 | undefined}>();
+expectTypeOf<ObjectMerge<{value?: 1}, {[MergePropertyKey.Value]?: 2}>>().toBe<{value?: 1 | 2}>();
+expectTypeOf<ObjectMerge<{[MergePropertyKey.Value]: 1}, {value?: 2}>>().toBe<{value: 1 | 2}>();
+
+// Enum aliases use ordinary spread rules for required, optional and readonly properties.
+expectTypeOf<ObjectMerge<{value?: 1}, {[MergePropertyKey.Value]: 2}>>().toBe<{value: 2}>();
+expectTypeOf<ObjectMerge<{[MergePropertyKey.Value]?: 1}, {value: 2}>>().toBe<{value: 2}>();
+expectTypeOf<ObjectMerge<{readonly [MergePropertyKey.Value]?: 1}, {readonly value?: 2 | undefined}>>().toBe<{value?: 1 | 2 | undefined}>();
+expectTypeOf<ObjectMerge<{readonly value: {readonly id: 1}}, {readonly [MergePropertyKey.Value]?: {readonly id: 2}}>>()
+	.toBe<{value: {readonly id: 1} | {readonly id: 2}}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]?: never}>>().toBe<{value: 1}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]: never}>>().toBe<{value: never}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]: any}>>().toBe<{value: any}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]?: unknown}>>().toBe<{value: unknown}>();
+expectTypeOf<ObjectMerge<{[MergePropertyKey.Value]: unknown}, {value?: 2}>>().toBe<{value: unknown}>();
+
+// A named enum property still overrides the same name alongside a string index signature.
+expectTypeOf<ObjectMerge<{value: 1}, {[key: string]: 2; [MergePropertyKey.Value]: 2}>>().toBe<{[key: string]: 2; value: 2}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[key: string]: 2; [MergePropertyKey.Value]?: 2}>>()
+	.toBe<{[key: string]: 1 | 2; value: 1 | 2}>();
+expectTypeOf<ObjectMerge<{[key: string]: 1; value: 1}, {[MergePropertyKey.Value]?: 2}>>()
+	.toBe<{[key: string]: 1 | 2; value: 1 | 2}>();
+
+const enumMergeDestination = {value: 1 as const, untouched: true as const};
+const enumMergeSource = {[MergePropertyKey.Value]: 2 as const};
+const enumMergeSpread = {...enumMergeDestination, ...enumMergeSource};
+expectTypeOf<ObjectMerge<typeof enumMergeDestination, typeof enumMergeSource>>().toBe<typeof enumMergeSpread>();
+expectTypeOf<keyof ObjectMerge<typeof enumMergeDestination, typeof enumMergeSource>>().toBe<keyof typeof enumMergeSpread>();
+
+const optionalEnumMergeSource: {readonly [MergePropertyKey.Value]?: 2} = {};
+const optionalEnumMergeSpread = {...enumMergeDestination, ...optionalEnumMergeSource};
+expectTypeOf<ObjectMerge<typeof enumMergeDestination, typeof optionalEnumMergeSource>>().toBe<typeof optionalEnumMergeSpread>();
+
+// The result is writable at its top level, and a required destination stays required after an optional override.
+declare let mutableEnumMerge: ObjectMerge<{readonly value: 1}, {readonly [MergePropertyKey.Value]?: 2}>;
+mutableEnumMerge.value = 1;
+mutableEnumMerge.value = 2;
+// @ts-expect-error Implicit optional absence is not a value that can overwrite the destination.
+mutableEnumMerge.value = undefined;
+expectTypeOf({}).not.toBeAssignableTo<typeof mutableEnumMerge>();
+
+// Unique symbols and unrelated string names do not collide with the enum property.
+expectTypeOf<ObjectMerge<{value: 1; [sym]: true}, {[MergePropertyKey.Value]: 2; other?: string}>>()
+	.toBe<{value: 2; [sym]: true; other?: string}>();
+expectTypeOf<ObjectMerge<{kind: 'first'; value: 1} | {kind: 'second'; value?: 3}, {[MergePropertyKey.Value]?: 2}>>()
+	.toBe<{kind: 'first'; value: 1 | 2} | {kind: 'second'; value?: 2 | 3}>();
+
+// Enum keys keep ordinary boundary behavior.
+expectTypeOf<ObjectMerge<any, {[MergePropertyKey.Value]: 2}>>().toBe<any>();
+expectTypeOf<ObjectMerge<{[MergePropertyKey.Value]: 1}, any>>().toBe<any>();
+expectTypeOf<ObjectMerge<never, {[MergePropertyKey.Value]: 2}>>().toBe<never>();
+expectTypeOf<ObjectMerge<{[MergePropertyKey.Value]: 1}, never>>().toBe<never>();
+// @ts-expect-error The input must be an object even when the other side uses an enum key.
+type UnknownEnumMerge = ObjectMerge<unknown, {[MergePropertyKey.Value]: 2}>;
+
+enum EquivalentMergePropertyKey {
+	Value = 'value',
+	Zero = '0',
+	PaddedZero = '00',
+}
+
+// Distinct enum types and canonical numeric forms can still name the same property.
+expectTypeOf<ObjectMerge<{[MergePropertyKey.Value]: 1}, {[EquivalentMergePropertyKey.Value]: 2}>>().toBe<{value: 2}>();
+expectTypeOf<ObjectMerge<{0: 1}, {[EquivalentMergePropertyKey.Zero]: 2}>>().toBe<{0: 2}>();
+expectTypeOf<ObjectMerge<{0: 1}, {[EquivalentMergePropertyKey.Zero]?: 2}>>().toBe<{0: 1 | 2}>();
+expectTypeOf<ObjectMerge<{[EquivalentMergePropertyKey.Zero]: 1}, {0?: 2}>>().toBe<{0: 1 | 2}>();
+expectTypeOf<ObjectMerge<{0: 1}, {[EquivalentMergePropertyKey.PaddedZero]: 2}>>().toBe<{0: 1; '00': 2}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]: undefined}>>().toBe<{value: undefined}>();
+expectTypeOf<ObjectMerge<{value: 1}, {[MergePropertyKey.Value]?: null}>>().toBe<{value: 1 | null}>();
+
+// Generic value reads and inferred calls retain their useful result types.
+function _readEnumMerge<Value>(value: ObjectMerge<{[MergePropertyKey.Value]: Value}, {value?: number}>): Value | number {
+	return value.value;
+}
+
+function _readOrdinaryMerge<Value>(value: ObjectMerge<{value: Value}, {other: number}>): Value {
+	return value.value;
+}
+
+declare function inferObjectMerge<First extends object, Second extends object>(first: First, second: Second): ObjectMerge<First, Second>;
+expectTypeOf(inferObjectMerge(enumMergeDestination, enumMergeSource)).toBe<typeof enumMergeSpread>();
+expectTypeOf<Pick<ObjectMerge<typeof enumMergeDestination, typeof enumMergeSource>, MergePropertyKey.Value>>()
+	.toBe<{[MergePropertyKey.Value]: 2}>();
+
+// Numeric index signatures cannot overwrite distinct numeric-looking string properties.
+expectTypeOf<ObjectMerge<{'01': string}, Record<number, number>>>().toBe<{[key: number]: number; '01': string}>();
+expectTypeOf<ObjectMerge<Record<number, number>, {'01'?: string}>>().toBe<{[key: number]: number; '01'?: string}>();
+
+function _readNoncanonicalMerge<Value>(value: ObjectMerge<{'01': Value}, Record<number, number>>): Value {
+	return value['01'];
+}
+
+// @ts-expect-error An unrelated numeric entry cannot change this named property's value type.
+const incorrectNoncanonicalMerge: ObjectMerge<{'01': string}, Record<number, number>>['01'] = 1;
+
+// An explicit numeric-string domain covers noncanonical numeric names.
+expectTypeOf<ObjectMerge<{'01': string}, Record<`${number}`, number>>['01']>().toBe<string | number>();
+expectTypeOf<ObjectMerge<{[EquivalentMergePropertyKey.PaddedZero]: 'kept'}, Record<number, number>>['00']>().toBe<'kept'>();
+expectTypeOf<ObjectMerge<{[EquivalentMergePropertyKey.Zero]: string}, Record<number, number>>['0']>().toBe<string | number>();
+
+enum NumericMergeIndex {
+	First = 1,
+}
+expectTypeOf<ObjectMerge<{[NumericMergeIndex.First]: string}, Record<number, number>>[1]>().toBe<string | number>();
+expectTypeOf<ObjectMerge<Record<number, number>, {'01'?: never}>['01']>().toBe<undefined>();
+
+declare let writablePaddedMerge: ObjectMerge<{readonly '01': {readonly id: 'stable'}; readonly '1.0'?: boolean}, Record<number, number>>;
+writablePaddedMerge['01'] = {id: 'stable'};
+writablePaddedMerge['1.0'] = true;
+expectTypeOf(writablePaddedMerge['01'].id).toBe<'stable'>();
+// @ts-expect-error A valid nested value remains readonly because it is copied by reference.
+writablePaddedMerge['01'].id = 'stable';
+
+declare const numericMergeValues: Record<number, number>;
+const inferredPaddedMerge = inferObjectMerge({'01': 'stable' as const}, numericMergeValues);
+expectTypeOf(inferredPaddedMerge['01']).toBe<'stable'>();
+
+function _constructPaddedMerge<Value>(payload: Value): ObjectMerge<{'01': Value}, Record<number, number>> {
+	return {'01': payload, 1: 9};
+}
+
+// Numeric properties use their string spellings when a case-shaped index signature covers them.
+expectTypeOf<ObjectMerge<{0: boolean}, Record<Lowercase<string>, number>>>()
+	.toBe<{[key: Lowercase<string>]: number | boolean; 0: number | boolean}>();
+expectTypeOf<ObjectMerge<Record<Uppercase<string>, number>, {0?: boolean}>>()
+	.toBe<{[key: Uppercase<string>]: number | boolean; 0?: number | boolean}>();
+
+// A branded index domain does not change a separately declared, unbranded property.
+function _readNamedOverride<Value>(value: ObjectMerge<Record<Tagged<string, 'Index'>, string>, {name?: Value}>): Value | undefined {
+	return value.name;
+}
+
+function _readNamedDestination<Value>(value: ObjectMerge<{name?: Value}, Record<Tagged<string, 'Index'>, string>>): Value | undefined {
+	return value.name;
+}
+
+// A destination `number` index signature absorbs a required canonical numeric key, but not a noncanonical one.
+expectTypeOf<ObjectMerge<Record<number, number>, {'0': string; '01': boolean}>>()
+	.toBe<{[key: number]: number | string; '0': string; '01': boolean}>();

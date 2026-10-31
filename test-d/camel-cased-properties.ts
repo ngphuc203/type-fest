@@ -1,0 +1,91 @@
+import {expectTypeOf} from 'nz';
+import type {CamelCaseOptions} from '../source/camel-case.d.ts';
+import type {CamelCasedProperties, IsEqual} from '../index.d.ts';
+
+declare const foo: CamelCasedProperties<{A: number; B: {C: string}}>;
+expectTypeOf(foo).toBe<{a: number; b: {C: string}}>();
+
+declare const bar: CamelCasedProperties<Array<{helloWorld: string}>>;
+expectTypeOf(bar).toBe<Array<{helloWorld: string}>>();
+
+declare const fooBar: CamelCasedProperties<() => {a: string}>;
+expectTypeOf(fooBar).toBe<() => {a: string}>();
+
+declare const baz: CamelCasedProperties<{fooBAR: number; BARFoo: string}, {preserveConsecutiveUppercase: true}>;
+expectTypeOf(baz).toBe<{fooBAR: number; bARFoo: string}>();
+
+declare const biz: CamelCasedProperties<{fooBAR: number; BARFoo: string}>;
+expectTypeOf(biz).toBe<{fooBar: number; barFoo: string}>();
+
+declare const fooBarPunctuated: CamelCasedProperties<{'hello@world1': {'foo::bar': string}}>;
+expectTypeOf(fooBarPunctuated).toBe<{'hello@world1': {'foo::bar': string}}>();
+
+declare const fooBarPunctuatedSplit: CamelCasedProperties<{'hello@world1': {'foo::bar': string}}, {splitOnPunctuation: true}>;
+expectTypeOf(fooBarPunctuatedSplit).toBe<{'helloWorld1': {'foo::bar': string}}>();
+
+declare const fooBarPunctuatedSplitNumberSplit: CamelCasedProperties<{'hello@world1': {'foo::bar': string}}, {splitOnPunctuation: true; splitOnNumbers: true}>;
+expectTypeOf(fooBarPunctuatedSplitNumberSplit).toBe<{'helloWorld1': {'foo::bar': string}}>();
+
+// Verify example
+type User = {
+	UserId: number;
+	UserName: string;
+};
+
+type UserPunctuated = {
+	'user::id': number;
+	'user::name': string;
+};
+
+const result: CamelCasedProperties<User> = {
+	userId: 1,
+	userName: 'Tom',
+};
+expectTypeOf(result).toBe<CamelCasedProperties<User>>();
+expectTypeOf(result).toBe<CamelCasedProperties<UserPunctuated, {splitOnPunctuation: true}>>();
+
+declare const withLeadingUnderscores: CamelCasedProperties<{_foo_bar: string; __baz_qux: number}, {preserveLeadingUnderscores: true}>;
+expectTypeOf(withLeadingUnderscores).toBe<{_fooBar: string; __bazQux: number}>();
+
+declare const withLeadingUnderscoresDefault: CamelCasedProperties<{_foo_bar: string}>;
+expectTypeOf(withLeadingUnderscoresDefault).toBe<{fooBar: string}>();
+
+// A readonly array has no properties to re-case, so it passes through unchanged, like it does for `PascalCasedProperties` and `DelimiterCasedProperties`. `IsEqual` is used because the flattened object the bug produced still satisfies `expectType<readonly string[]>`.
+expectTypeOf<IsEqual<CamelCasedProperties<readonly string[]>, readonly string[]>>().toBe<true>();
+expectTypeOf<IsEqual<CamelCasedProperties<readonly [1, 2]>, readonly [1, 2]>>().toBe<true>();
+expectTypeOf<IsEqual<CamelCasedProperties<string[]>, string[]>>().toBe<true>();
+expectTypeOf<IsEqual<CamelCasedProperties<[1, 2]>, [1, 2]>>().toBe<true>();
+
+// Generic options cannot delay values that are returned unchanged.
+function _keepValue<Options extends CamelCaseOptions>(value: readonly string[]): CamelCasedProperties<readonly string[], Options> {
+	return value;
+}
+
+function _keepCallable<Options extends CamelCaseOptions>(value: () => number): CamelCasedProperties<() => number, Options> {
+	return value;
+}
+
+// A non-literal preservation flag resolves like the default.
+expectTypeOf<CamelCasedProperties<{_foo_bar: 1}, {preserveLeadingUnderscores: boolean}>>().toBe<{fooBar: 1}>();
+
+// Resolving options in the scalar transform keeps selected fields' modifiers and values intact.
+expectTypeOf<CamelCasedProperties<{readonly userId2?: {nestedValue: 1}; mutableValue?: string}, {splitOnNumbers: true; splitOnPunctuation: true}>>()
+	.toBe<{readonly userId2?: {nestedValue: 1}; mutableValue?: string}>();
+expectTypeOf<CamelCasedProperties<never>>().toBe<never>();
+expectTypeOf<CamelCasedProperties<any>>().toBe<any>();
+expectTypeOf<CamelCasedProperties<unknown>>().toBe<{}>();
+
+function _readGenericPayload<Value>(value: CamelCasedProperties<{readonly userPayload: Promise<Value>}>): {value: Promise<Value>} {
+	return {value: value.userPayload};
+}
+
+function _keepGenericCallable<Value, Options extends CamelCaseOptions>(value: () => Value): CamelCasedProperties<() => Value, Options> {
+	return value;
+}
+
+declare const copiedModifiers: CamelCasedProperties<{readonly userId?: number; mutableValue?: string}>;
+// @ts-expect-error Recasing a property does not make a readonly field writable.
+copiedModifiers.userId = 1;
+copiedModifiers.mutableValue = 'updated';
+// @ts-expect-error Optional fields do not admit an explicit undefined.
+copiedModifiers.mutableValue = undefined;

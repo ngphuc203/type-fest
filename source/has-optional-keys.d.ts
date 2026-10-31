@@ -1,0 +1,26 @@
+/**
+Returns a boolean for whether the given type has any optional fields.
+
+This is useful when you want to create an API whose behavior depends on the presence or absence of optional fields.
+
+@example
+```
+import type {HasOptionalKeys, OptionalKeysOf} from 'type-fest';
+
+type UpdateService<Entity extends object> = {
+	removeField: HasOptionalKeys<Entity> extends true
+		? (field: OptionalKeysOf<Entity>) => Promise<void>
+		: never;
+};
+```
+
+@category Utilities
+*/
+export type HasOptionalKeys<BaseType extends object> = (
+	BaseType extends unknown // Check each union member before aggregating whether any has an optional key.
+		// Remap keys to compare properties without applying `Required`'s array element transformation.
+		? [BaseType] extends [{[Key in keyof BaseType as Key]-?: BaseType[Key]}] ? never : true
+		: never
+) extends never ? false : true;
+
+export {};

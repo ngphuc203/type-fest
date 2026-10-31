@@ -1,0 +1,103 @@
+import type {UnwrapBrand} from './internal/object.d.ts';
+import type {JoinableItem} from './internal/string.d.ts';
+
+// `null` and `undefined` are treated uniquely in the built-in join method, in a way that differs from the default `toString` that would result in the type `${undefined}`. That's why we need to handle it specifically with this helper.
+// @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/join#description
+type NullishCoalesce<
+	Value extends JoinableItem,
+	Fallback extends string,
+> = Value extends undefined | null ? Fallback : Value extends object ? UnwrapBrand<Value> : Value;
+
+/**
+Join an array of strings and/or numbers using the given string as a delimiter.
+
+Use-case: Defining key paths in a nested object. For example, for dot-notation fields in MongoDB queries.
+
+@example
+```
+import type {Join} from 'type-fest';
+
+// Mixed (strings & numbers) items
+const path1 = ['foo', 0, 'baz'].join('.') as Join<['foo', 0, 'baz'], '.'>;
+//=> 'foo.0.baz'
+
+// Only string items
+const path2 = ['foo', 'bar', 'baz'].join('.') as Join<['foo', 'bar', 'baz'], '.'>;
+//=> 'foo.bar.baz'
+
+// Only number items
+const path3 = [1, 2, 3].join('.') as Join<[1, 2, 3], '.'>;
+//=> '1.2.3'
+
+// Only bigint items
+const path4 = [1n, 2n, 3n].join('.') as Join<[1n, 2n, 3n], '.'>;
+//=> '1.2.3'
+
+// Only boolean items
+const path5 = [true, false, true].join('.') as Join<[true, false, true], '.'>;
+//=> 'true.false.true'
+
+// Contains nullish items
+const path6 = ['foo', undefined, 'baz', null, 'xyz'].join('.') as Join<['foo', undefined, 'baz', null, 'xyz'], '.'>;
+//=> 'foo..baz..xyz'
+
+// Partial tuple shapes (rest param last)
+const path7 = ['prefix'].join('.') as Join<['prefix', ...string[]], '.'>;
+//=> 'prefix' | `prefix.${string}`
+
+// Partial tuple shapes (rest param first)
+const path8 = ['suffix'].join('.') as Join<[...string[], 'suffix'], '.'>;
+//=> 'suffix' | `${string}.suffix`
+
+// Tuples items with nullish unions
+const path9 = ['hello', 'world'].join('.') as Join<['hello' | undefined, 'world' | null], '.'>;
+//=> '.' | '.world' | 'hello.' | 'hello.world'
+```
+
+Note: Each optional element doubles the number of possible results, so a tuple with 16 or more optional elements makes TypeScript report that the union type is too complex to represent.
+
+@category Array
+@category Template literal
+*/
+export type Join<
+	Items extends readonly JoinableItem[],
+	Delimiter extends string,
+> = Delimiter extends unknown
+	// Select one delimiter for the whole recursion, so a union cannot mix separators in the result.
+	? JoinHelper<Items, Delimiter extends object ? UnwrapBrand<Delimiter> : Delimiter>
+	: never;
+
+type JoinHelper<
+	Items extends readonly JoinableItem[],
+	Delimiter extends string,
+	// The joined items so far, each followed by the delimiter, are kept in `Result`, so the recursion over required items is in tail position and a long tuple does not hit the recursion limit.
+	Result extends string = '',
+	// Required trailing items are accumulated separately, so tuples with a leading rest element also use tail recursion.
+	Suffix extends string = '',
+> = Items extends readonly []
+	? `${Result}${Suffix}`
+	: Items extends readonly [JoinableItem?]
+		? `${Result}${NullishCoalesce<Items[0], ''>}${Suffix}`
+		: Items extends readonly [
+			infer First extends JoinableItem,
+			...infer Tail extends readonly JoinableItem[],
+		]
+			? [] extends Tail
+				// A rest element can contain no items, in which case there is no separator after the first item.
+				? `${Result}${NullishCoalesce<First, ''>}${Delimiter}${JoinHelper<Tail, Delimiter>}${Suffix}` | `${Result}${NullishCoalesce<First, ''>}${Suffix}`
+				: JoinHelper<Tail, Delimiter, `${Result}${NullishCoalesce<First, ''>}${Delimiter}`, Suffix>
+			: Items extends readonly [
+				...infer Head extends readonly JoinableItem[],
+				infer Last extends JoinableItem,
+			]
+				? [] extends Head
+					? `${Result}${JoinHelper<Head, Delimiter>}${Delimiter}${NullishCoalesce<Last, ''>}${Suffix}` | `${Result}${NullishCoalesce<Last, ''>}${Suffix}`
+					: JoinHelper<Head, Delimiter, Result, `${Delimiter}${NullishCoalesce<Last, ''>}${Suffix}`>
+				: '0' extends keyof Items
+					? Items extends readonly [JoinableItem?, ...infer Tail extends readonly JoinableItem[]]
+						// A fixed optional slot can be absent or a hole; making its read value required lets the same traversal account for both.
+						? JoinHelper<[Items[0], ...Tail], Delimiter, Result, Suffix>
+						: never
+					: `${Result}${string}${Suffix}`;
+
+export {};

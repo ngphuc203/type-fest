@@ -1,0 +1,212 @@
+import {expectTypeOf} from 'nz';
+import type {FixedLengthArray} from '../index.d.ts';
+
+type FixedToThreeStrings = FixedLengthArray<string, 3>;
+declare const fixedToThreeStrings: FixedToThreeStrings;
+
+['a', 'b', 'c'] satisfies FixedToThreeStrings;
+expectTypeOf<FixedToThreeStrings>().toBeAssignableTo<readonly [string, string, string]>();
+expectTypeOf<FixedToThreeStrings>().toBeAssignableTo<readonly string[]>();
+
+// Reading within bounds
+expectTypeOf<FixedToThreeStrings[0]>().toBe<string>();
+expectTypeOf<FixedToThreeStrings[1]>().toBe<string>();
+expectTypeOf<FixedToThreeStrings[2]>().toBe<string>();
+
+// Reading out of bounds
+// @ts-expect-error
+type OutOfBounds = FixedToThreeStrings[3];
+// @ts-expect-error
+expectTypeOf(fixedToThreeStrings[4]);
+
+// Indexing with a non-literal `number` is not allowed, since it could be out of bounds
+declare const index: number;
+// @ts-expect-error
+type NonLiteralIndex = FixedToThreeStrings[number];
+// @ts-expect-error
+expectTypeOf(fixedToThreeStrings[index]);
+// @ts-expect-error
+fixedToThreeStrings[index] = 'd';
+
+// Iterating and destructuring keep the element type, even with `noUncheckedIndexedAccess`
+const [first, second, third] = fixedToThreeStrings;
+expectTypeOf(first).toBe<string>();
+expectTypeOf(second).toBe<string>();
+expectTypeOf(third).toBe<string>();
+
+for (const item of fixedToThreeStrings) {
+	expectTypeOf(item).toBe<string>();
+}
+
+for (const [entryIndex, item] of fixedToThreeStrings.entries()) {
+	expectTypeOf(entryIndex).toBe<number>();
+	expectTypeOf(item).toBe<string>();
+}
+
+// Spreading into an array literal results in `any[]`, since there is no `number` index signature. This is a known limitation.
+expectTypeOf([...fixedToThreeStrings]).toBe<any[]>();
+// eslint-disable-next-line unicorn/prefer-spread -- spreading results in `any[]`
+expectTypeOf(Array.from(fixedToThreeStrings)).toBe<string[]>();
+// eslint-disable-next-line unicorn/prefer-spread -- spreading results in `any[]`
+expectTypeOf(fixedToThreeStrings.slice()).toBe<string[]>();
+
+// Spreading into function arguments still checks the element type
+declare function takesNumbers(...numbers: number[]): void;
+// @ts-expect-error
+takesNumbers(...fixedToThreeStrings);
+
+// Writing within bounds
+fixedToThreeStrings[0] = 'a';
+fixedToThreeStrings[1] = 'b';
+fixedToThreeStrings[2] = 'c';
+
+// Writing out of bounds
+// @ts-expect-error
+fixedToThreeStrings[3] = 'd';
+
+expectTypeOf<FixedToThreeStrings['length']>().toBe<3>();
+
+// @ts-expect-error
+type NoSplice = FixedToThreeStrings['splice'];
+// @ts-expect-error
+type NoPush = FixedToThreeStrings['push'];
+// @ts-expect-error
+type NoPop = FixedToThreeStrings['pop'];
+// @ts-expect-error
+type NoShift = FixedToThreeStrings['shift'];
+// @ts-expect-error
+type NoUnshift = FixedToThreeStrings['unshift'];
+
+expectTypeOf<['a', 'b', 123]>().not.toBeAssignableTo<FixedToThreeStrings>();
+expectTypeOf<['a']>().not.toBeAssignableTo<FixedToThreeStrings>();
+expectTypeOf<['a', 'b']>().not.toBeAssignableTo<FixedToThreeStrings>();
+expectTypeOf<['a', 'b', 'c', 'd']>().not.toBeAssignableTo<FixedToThreeStrings>();
+
+// `length` must describe the array that `TupleOf` actually builds, so a decimal part is ignored and a negative length yields an empty tuple.
+expectTypeOf<FixedLengthArray<string, 3.5>['length']>().toBe<3>();
+expectTypeOf<FixedLengthArray<string, -2>['length']>().toBe<0>();
+expectTypeOf<FixedLengthArray<string, 2 | 3>['length']>().toBe<2 | 3>();
+expectTypeOf<FixedLengthArray<string, number>['length']>().toBe<number>();
+
+type FixedLength = FixedLengthArray<string, number>;
+declare const fixedLength: FixedLength;
+
+expectTypeOf<string[]>().toBeAssignableTo<FixedLength>();
+expectTypeOf<FixedLength>().toBeAssignableTo<readonly string[]>();
+
+// Reading
+// Note: The extra `undefined` is only present when `noUncheckedIndexedAccess` is enabled.
+expectTypeOf(fixedLength[0]).toBe<string | undefined>();
+expectTypeOf(fixedLength[100]).toBe<string | undefined>();
+// Note: Reading directly from the type doesn't include `undefined`.
+expectTypeOf<FixedLength[100]>().toBe<string>();
+
+// Writing
+// This is allowed for now, refer https://github.com/sindresorhus/type-fest/pull/1246#discussion_r2384018774
+fixedLength[0] = 'a';
+fixedLength[100] = 'b';
+
+// @ts-expect-error
+type NoSplice = FixedLength['splice'];
+// @ts-expect-error
+type NoPush = FixedLength['push'];
+// @ts-expect-error
+type NoPop = FixedLength['pop'];
+// @ts-expect-error
+type NoShift = FixedLength['shift'];
+// @ts-expect-error
+type NoUnshift = FixedLength['unshift'];
+
+['a', 'b', 'c'] satisfies FixedLengthArray<string | number, 3>;
+[3, 2, 1] satisfies FixedLengthArray<string | number, 3>;
+['a', 'b', 3] satisfies FixedLengthArray<string | number, 3>;
+[1, 'b', 3] satisfies FixedLengthArray<string | number, 3>;
+expectTypeOf<[1, 'b', 3, 4]>().not.toBeAssignableTo<FixedLengthArray<string | number, 3>>();
+expectTypeOf<[1, 'b', true]>().not.toBeAssignableTo<FixedLengthArray<string | number, 3>>();
+
+['a', 'b'] satisfies FixedLengthArray<string, 2 | 3>;
+['a', 'b', 'c'] satisfies FixedLengthArray<string, 2 | 3>;
+expectTypeOf<['a']>().not.toBeAssignableTo<FixedLengthArray<string, 2 | 3>>();
+expectTypeOf<[1, 2]>().not.toBeAssignableTo<FixedLengthArray<string, 2 | 3>>();
+
+// Reading within bounds works and reading out of bounds is an error for any element type
+expectTypeOf<FixedLengthArray<any, 2>[1]>().toBe<any>();
+expectTypeOf<FixedLengthArray<unknown, 2>[1]>().toBe<unknown>();
+expectTypeOf<FixedLengthArray<never, 2>[1]>().toBe<never>();
+// @ts-expect-error
+type AnyOutOfBounds = FixedLengthArray<any, 2>[2];
+// @ts-expect-error
+type UnknownOutOfBounds = FixedLengthArray<unknown, 2>[2];
+// @ts-expect-error
+type NeverOutOfBounds = FixedLengthArray<never, 2>[2];
+// @ts-expect-error
+type EmptyOutOfBounds = FixedLengthArray<string, 0>[0];
+
+// Checking the length narrows to the matching tuple, so every index of that length becomes available.
+declare const variableTupleLength: FixedLengthArray<string, 2 | 3>;
+if (variableTupleLength.length === 3) {
+	expectTypeOf(variableTupleLength[2]).toBe<string>();
+}
+
+expectTypeOf<Extract<FixedLengthArray<string, 2 | 3>, {readonly length: 3}>>().toBe<FixedLengthArray<string, 3>>();
+
+expectTypeOf<FixedLengthArray<string, 2 | 3>>().toBe<FixedLengthArray<string, 2> | FixedLengthArray<string, 3>>();
+if (variableTupleLength.length === 2) {
+	expectTypeOf(variableTupleLength[1]).toBe<string>();
+	// @ts-expect-error
+	variableTupleLength[2] = 'c';
+}
+
+// Normalized lengths remain paired with their own indices.
+expectTypeOf<FixedLengthArray<number, 0 | 2>>().toBe<FixedLengthArray<number, 0> | FixedLengthArray<number, 2>>();
+expectTypeOf<FixedLengthArray<number, -1 | 2.5>>().toBe<FixedLengthArray<number, 0> | FixedLengthArray<number, 2>>();
+expectTypeOf<Extract<FixedLengthArray<number, -1 | 2.5>, {readonly length: 0}>>().toBe<FixedLengthArray<number, 0>>();
+expectTypeOf<Extract<FixedLengthArray<number, -1 | 2.5>, {readonly length: 2}>>().toBe<FixedLengthArray<number, 2>>();
+
+// A union of lengths does not allow changing its length or using a mutator.
+// @ts-expect-error
+variableTupleLength.length = 3;
+// @ts-expect-error
+type UnionWithoutPush = typeof variableTupleLength['push'];
+
+expectTypeOf<FixedLengthArray<any, 2 | 3>>().toBe<FixedLengthArray<any, 2> | FixedLengthArray<any, 3>>();
+expectTypeOf<FixedLengthArray<unknown, 2 | 3>>().toBe<FixedLengthArray<unknown, 2> | FixedLengthArray<unknown, 3>>();
+expectTypeOf<FixedLengthArray<never, 2 | 3>>().toBe<FixedLengthArray<never, 2> | FixedLengthArray<never, 3>>();
+expectTypeOf<FixedLengthArray<string, never>>().toBe<FixedLengthArray<string, 0>>();
+expectTypeOf<FixedLengthArray<string, any>>().toBe<FixedLengthArray<string, number>>();
+
+function makeTriple<const Value>(value: Value): FixedLengthArray<Value, 3> {
+	return [value, value, value];
+}
+
+const repeatedValue = makeTriple({code: 'red'});
+expectTypeOf(repeatedValue[2]).toBe<{readonly code: 'red'}>();
+repeatedValue[0] = {code: 'red'};
+// @ts-expect-error Const-inferred nested fields stay readonly.
+repeatedValue[2].code = 'red';
+// @ts-expect-error A valid length value cannot replace the readonly length.
+repeatedValue.length = 3;
+// @ts-expect-error There is no fourth position.
+const _fourthValue: unknown = repeatedValue[3];
+// @ts-expect-error Fixed-length results exclude length-changing methods.
+type MissingMutator = typeof repeatedValue['push'];
+
+function _copyFixedItems<Value, Length extends number>(values: FixedLengthArray<Value, Length>): Value[] {
+	return values.map(value => value);
+}
+
+function _readFixedItem<Value>(values: FixedLengthArray<{readonly value: Value}, 3>): Value {
+	return values[2].value;
+}
+
+// Enum lengths still produce fixed positions and an ordinary numeric length.
+enum ChannelCount {
+	Rgb = 3,
+}
+const enumLengthColor: FixedLengthArray<number, ChannelCount.Rgb> = [255, 128, 0];
+expectTypeOf(enumLengthColor.length).toBe<3>();
+expectTypeOf(enumLengthColor[2]).toBe<number>();
+// @ts-expect-error The enum length does not introduce a broad numeric index signature.
+expectTypeOf(enumLengthColor[3]);
+// @ts-expect-error A three-channel color must contain all three elements.
+const incompleteEnumLengthColor: FixedLengthArray<number, ChannelCount.Rgb> = [255, 128];

@@ -1,0 +1,216 @@
+import {expectTypeOf} from 'nz';
+import type {ArrayFlat, Opaque, PositiveInfinity, Tagged} from '../index.d.ts';
+
+// Fixed-length tuples
+expectTypeOf<ArrayFlat<[]>>().toBe<[]>();
+expectTypeOf<ArrayFlat<[1, 2, 3]>>().toBe<[1, 2, 3]>();
+expectTypeOf<ArrayFlat<[[1, 2], [3, 4]]>>().toBe<[1, 2, 3, 4]>();
+expectTypeOf<ArrayFlat<[1, [2, [3]], 4]>>().toBe<[1, 2, [3], 4]>();
+expectTypeOf<ArrayFlat<[1, [], 2]>>().toBe<[1, 2]>();
+expectTypeOf<ArrayFlat<[{a: number}, [{b: string}]]>>().toBe<[{a: number}, {b: string}]>();
+
+// Depth
+type Nested = [[0, [1, [2, [3, [4, [5]]]]]]];
+expectTypeOf<ArrayFlat<Nested, 0>>().toBe<Nested>();
+expectTypeOf<ArrayFlat<Nested, 2>>().toBe<[0, 1, [2, [3, [4, [5]]]]]>();
+expectTypeOf<ArrayFlat<Nested, 3>>().toBe<[0, 1, 2, [3, [4, [5]]]]>();
+expectTypeOf<ArrayFlat<Nested, 6>>().toBe<[0, 1, 2, 3, 4, 5]>();
+expectTypeOf<ArrayFlat<Nested, 7>>().toBe<[0, 1, 2, 3, 4, 5]>();
+expectTypeOf<ArrayFlat<Nested, PositiveInfinity>>().toBe<[0, 1, 2, 3, 4, 5]>();
+expectTypeOf<ArrayFlat<[0, ...Array<[1, [2]]>], PositiveInfinity>>().toBe<[0, ...Array<1 | 2>]>();
+
+// A union of depths gives a result for each depth.
+expectTypeOf<ArrayFlat<[1, [2], 3], 0 | 1>>().toBe<[1, [2], 3] | [1, 2, 3]>();
+
+// A depth below 1 does not flatten, just like `Array#flat()`.
+expectTypeOf<ArrayFlat<Nested, -1>>().toBe<Nested>();
+expectTypeOf<ArrayFlat<Nested, 0.5>>().toBe<Nested>();
+
+// An unknown depth gives the element type of the built-in `Array#flat()`.
+expectTypeOf<ArrayFlat<[[1], [[2]]], number>>().toBe<Array<FlatArray<[[1], [[2]]], number>>>();
+
+// Rest elements and arrays of unknown length
+expectTypeOf<ArrayFlat<number[][]>>().toBe<number[]>();
+expectTypeOf<ArrayFlat<['a', number[], 'b']>>().toBe<['a', ...number[], 'b']>();
+expectTypeOf<ArrayFlat<[1, [2, ...Array<3>], 4]>>().toBe<[1, 2, ...Array<3>, 4]>();
+expectTypeOf<ArrayFlat<[...Array<[1, 2]>, 3]>>().toBe<[...Array<1 | 2>, 3]>();
+
+// The pairing of elements in an array of unknown length cannot be kept, so their types are merged.
+expectTypeOf<ArrayFlat<Array<[number, string]>>>().toBe<Array<number | string>>();
+
+// Two rest elements are merged into one, along with the elements between them.
+expectTypeOf<ArrayFlat<[number, Array<'a'>, Array<'b'>, boolean]>>().toBe<[number, ...Array<'a' | 'b'>, boolean]>();
+expectTypeOf<ArrayFlat<[...number[], string[]]>>().toBe<Array<number | string>>();
+
+// An optional element becomes a rest element, because it can be absent.
+type WithOptional = ArrayFlat<[boolean, [string, number?], boolean]>;
+expectTypeOf<WithOptional>().toBe<[boolean, string, ...number[], boolean]>();
+expectTypeOf([true, 'a', false] as [true, 'a', false]).toBeAssignableTo<WithOptional>();
+expectTypeOf([true, 'a', 1, false] as [true, 'a', 1, false]).toBeAssignableTo<WithOptional>();
+expectTypeOf<ArrayFlat<Array<[number, string?]>>>().toBe<Array<number | string>>();
+expectTypeOf<ArrayFlat<[1, 2?]>>().toBe<[1, ...Array<2>]>();
+
+// Unions
+expectTypeOf<ArrayFlat<[1, [2]] | [[3], 4]>>().toBe<[1, 2] | [3, 4]>();
+expectTypeOf<ArrayFlat<[1 | [2, 3]]>>().toBe<[1] | [2, 3]>();
+
+// A union of non-array members stays one element.
+expectTypeOf<ArrayFlat<[boolean, [string]]>>().toBe<[boolean, string]>();
+
+// Readonly arrays give a mutable array, just like `Array#flat()`.
+expectTypeOf<ArrayFlat<readonly [readonly [1, 2], 3]>>().toBe<[1, 2, 3]>();
+expectTypeOf<ArrayFlat<ReadonlyArray<readonly string[]>>>().toBe<string[]>();
+expectTypeOf<ArrayFlat<readonly [1, [2]], 0>>().toBe<[1, [2]]>();
+
+// Long tuples
+type LongTuple<Length extends number, Accumulator extends unknown[] = []> = Accumulator['length'] extends Length ? Accumulator : LongTuple<Length, [...Accumulator, [Accumulator['length']]]>;
+expectTypeOf<ArrayFlat<LongTuple<300>>['length']>().toBe<300>();
+
+// Deep nesting
+type DeeplyNested<Levels extends number, Value = 1, Counter extends unknown[] = []> = Counter['length'] extends Levels ? Value : DeeplyNested<Levels, [Value], [...Counter, unknown]>;
+expectTypeOf<ArrayFlat<DeeplyNested<20>, PositiveInfinity>>().toBe<[1]>();
+
+// A generic result is still known to be an array.
+declare function flat<ArrayType extends unknown[]>(array: ArrayType): ArrayFlat<ArrayType>;
+
+function _generic<ArrayType extends unknown[]>(array: ArrayType): unknown[] {
+	return flat(array);
+}
+
+function _genericTuple<Element>(array: ArrayFlat<readonly [Element, ...Element[]]>): unknown[] {
+	return array;
+}
+
+function _genericDeep<ArrayType extends unknown[]>(array: ArrayFlat<ArrayType, PositiveInfinity>): readonly unknown[] {
+	return array;
+}
+
+// Edge cases
+expectTypeOf<ArrayFlat<any>>().toBe<any>();
+expectTypeOf<ArrayFlat<never>>().toBe<never>();
+expectTypeOf<ArrayFlat<any[]>>().toBe<any[]>();
+expectTypeOf<ArrayFlat<never[]>>().toBe<never[]>();
+expectTypeOf<ArrayFlat<unknown[]>>().toBe<unknown[]>();
+expectTypeOf<ArrayFlat<[never, [never]]>>().toBe<[never, never]>();
+
+// `any` and `unknown` can be an array of any length, so they become a rest element.
+expectTypeOf<ArrayFlat<[any, 1]>>().toBe<[...any[], 1]>();
+expectTypeOf<ArrayFlat<[unknown, [2]]>>().toBe<[...unknown[], 2]>();
+expectTypeOf<ArrayFlat<[unknown, 1], 0>>().toBe<[unknown, 1]>();
+
+// `object` could be an array, but is kept as one element, like the built-in `Array#flat()` does.
+expectTypeOf<ArrayFlat<[object, 1]>>().toBe<[object, 1]>();
+
+// Known enum depths select the same tuple-preserving path as their numeric values.
+enum FlatDepth {
+	Keep = -1,
+	Zero = 0,
+	One = 1,
+	Two = 2,
+	Deep = 20,
+}
+expectTypeOf<ArrayFlat<[[1], [2]], FlatDepth.One>>().toBe<[1, 2]>();
+expectTypeOf<ArrayFlat<[[1, [2]]], FlatDepth.Two>>().toBe<[1, 2]>();
+expectTypeOf<ArrayFlat<[1, [2]], FlatDepth.Keep>>().toBe<[1, [2]]>();
+
+expectTypeOf<ArrayFlat<readonly [readonly [1, 2], 3], FlatDepth.One>>().toBe<[1, 2, 3]>();
+expectTypeOf<ArrayFlat<readonly [1, [2]], FlatDepth.Zero>>().toBe<[1, [2]]>();
+expectTypeOf<ArrayFlat<readonly [1, [2]], FlatDepth.Keep>>().toBe<[1, [2]]>();
+expectTypeOf<ArrayFlat<[[1, [2, [3]]]], FlatDepth.Two>>().toBe<[1, 2, [3]]>();
+expectTypeOf<ArrayFlat<DeeplyNested<20>, FlatDepth.Deep>>().toBe<[1]>();
+expectTypeOf<ArrayFlat<[1, [2]], FlatDepth.Zero | FlatDepth.One>>().toBe<[1, [2]] | [1, 2]>();
+expectTypeOf<ArrayFlat<[[1, [2]]], FlatDepth.One | FlatDepth.Two>>().toBe<[1, [2]] | [1, 2]>();
+expectTypeOf<ArrayFlat<[1, ...Array<[2]>], FlatDepth.One>>().toBe<[1, ...Array<2>]>();
+expectTypeOf<ArrayFlat<[[1, 2?]], FlatDepth.One>>().toBe<[1, ...Array<2>]>();
+expectTypeOf<ArrayFlat<[[1], [2]] | readonly [[3]], FlatDepth.One>>().toBe<[1, 2] | [3]>();
+expectTypeOf<ArrayFlat<[[1], [2]], Tagged<1, 'Depth'>>>().toBe<[1, 2]>();
+
+// An enum member whose value is unknown retains the built-in broad-depth fallback.
+declare enum DynamicFlatDepth {
+	Value,
+}
+expectTypeOf<ArrayFlat<[[1], [[2]]], DynamicFlatDepth.Value>>().toBe<Array<FlatArray<[[1], [[2]]], DynamicFlatDepth.Value>>>();
+expectTypeOf<ArrayFlat<[[1], [[2]]], number>>().toBe<Array<FlatArray<[[1], [[2]]], number>>>();
+expectTypeOf<ArrayFlat<unknown[], FlatDepth.One>>().toBe<unknown[]>();
+expectTypeOf<ArrayFlat<any, FlatDepth.One>>().toBe<any>();
+expectTypeOf<ArrayFlat<never, FlatDepth.One>>().toBe<never>();
+expectTypeOf<ArrayFlat<[never, [never]], FlatDepth.One>>().toBe<[never, never]>();
+expectTypeOf<ArrayFlat<[[1]], never>>().toBe<never>();
+expectTypeOf<ArrayFlat<[[1]], any>>().toBe<Array<FlatArray<[[1]], any>>>();
+// @ts-expect-error - A flattening depth must be numeric.
+expectTypeOf<ArrayFlat<[[1]], unknown>>();
+
+// A brand on a broad depth does not make its numeric value known.
+expectTypeOf<ArrayFlat<[[1], [[2]]], Tagged<number, 'Depth'>>>().toBe<Array<FlatArray<[[1], [[2]]], number>>>();
+expectTypeOf<ArrayFlat<[[1], [[2]]], Opaque<number, 'Depth'>>>().toBe<Array<FlatArray<[[1], [[2]]], number>>>();
+
+expectTypeOf<ArrayFlat<readonly [[1], [[2]]], Tagged<Tagged<number, 'Depth'>, 'Validated'>>>().toBe<Array<FlatArray<readonly [[1], [[2]]], number>>>();
+expectTypeOf<ArrayFlat<[[1], [[2]]], number & {readonly __brand: unique symbol}>>().toBe<Array<FlatArray<[[1], [[2]]], number>>>();
+expectTypeOf<ArrayFlat<[[1], [[2]]], Tagged<number, 'Depth'> | 0>>().toBe<Array<FlatArray<[[1], [[2]]], number>>>();
+expectTypeOf<ArrayFlat<[[1]], Tagged<0, 'Depth'>>>().toBe<[[1]]>();
+expectTypeOf<ArrayFlat<[[1]], Tagged<-1, 'Depth'>>>().toBe<[[1]]>();
+expectTypeOf<ArrayFlat<[[1, [2]]], Opaque<2, 'Depth'>>>().toBe<[1, 2]>();
+expectTypeOf<ArrayFlat<[[1]], Tagged<0 | 1, 'Depth'>>>().toBe<[[1]] | [1]>();
+expectTypeOf<ArrayFlat<[[1]], Tagged<FlatDepth.One, 'Depth'>>>().toBe<[1]>();
+expectTypeOf<ArrayFlat<[[Tagged<1, 'Element'>]], Tagged<1, 'Depth'>>>().toBe<[Tagged<1, 'Element'>]>();
+
+// Flatten fixed elements on both sides of a rest element without changing their order.
+expectTypeOf<ArrayFlat<[...Array<readonly [1, 2]>, readonly [3, [4]], 5], 2>>()
+	.toBe<[...Array<1 | 2>, 3, 4, 5]>();
+expectTypeOf<ArrayFlat<readonly [readonly [1, 2], ...ReadonlyArray<readonly [3, 4]>, readonly [5, [6]]], 2>>()
+	.toBe<[1, 2, ...Array<3 | 4>, 5, 6]>();
+expectTypeOf<ArrayFlat<[0, ...unknown[], [1, 2]]>>().toBe<[0, ...unknown[], 1, 2]>();
+expectTypeOf<ArrayFlat<[0, ...never[], [1]]>>().toBe<[0, ...never[], 1]>();
+
+// Nested optional arrays contribute a rest element; explicitly allowed undefined values remain possible.
+expectTypeOf<ArrayFlat<[0, [(1 | undefined)?, [2]?], 3], 2>>()
+	.toBe<[0, ...Array<1 | 2 | undefined>, 3]>();
+expectTypeOf<ArrayFlat<[([1, 2])?, ...ReadonlyArray<readonly [3, 4]>]>>()
+	.toBe<Array<1 | 2 | 3 | 4>>();
+expectTypeOf<ArrayFlat<[[null, false], [], [0, '', undefined]]>>()
+	.toBe<[null, false, 0, '', undefined]>();
+expectTypeOf<ArrayFlat<[[Tagged<string, 'Name'>], readonly [{readonly id: 1}]]>>()
+	.toBe<[Tagged<string, 'Name'>, {readonly id: 1}]>();
+
+// Check boundary values as well as the length of a long flattened tuple.
+expectTypeOf<ArrayFlat<LongTuple<300>>[0]>().toBe<0>();
+expectTypeOf<ArrayFlat<LongTuple<300>>[299]>().toBe<299>();
+
+function _genericFlattenDepth<Value extends readonly unknown[], Depth extends number>(value: ArrayFlat<Value, Depth>): unknown[] {
+	return value;
+}
+
+declare function flattenTuple<const Value extends readonly unknown[], Depth extends number>(value: Value, depth: Depth): ArrayFlat<Value, Depth>;
+const flattenedObjects = flattenTuple([[{id: 1}], [{id: 2}, [{id: 3}]]], 2);
+expectTypeOf(flattenedObjects).toBe<[{readonly id: 1}, {readonly id: 2}, {readonly id: 3}]>();
+flattenedObjects[0] = {id: 1};
+// @ts-expect-error Flattening makes the outer array mutable, while retaining the nested object value's readonly properties.
+flattenedObjects[0].id = 1;
+// @ts-expect-error An unknown value is not necessarily an array.
+type UnknownFlattenInput = ArrayFlat<unknown>;
+
+// Flattening a union-valued suffix keeps each complete alternative, rather than mixing their elements.
+type AlternativeFlatSuffix = ArrayFlat<[...Array<[0]>, [1] | [2, 3], 4]>;
+expectTypeOf<AlternativeFlatSuffix>().toBe<[...Array<0>, 1, 4] | [...Array<0>, 2, 3, 4]>();
+expectTypeOf<[0, 1, 3, 4]>().not.toBeAssignableTo<AlternativeFlatSuffix>();
+type LongFlatSuffix = ArrayFlat<[...Array<[-1]>, ...LongTuple<120>]>;
+expectTypeOf<LongFlatSuffix extends [...unknown[], infer Last] ? Last : never>().toBe<119>();
+expectTypeOf<LongFlatSuffix extends [...unknown[], infer Previous, unknown] ? Previous : never>().toBe<118>();
+
+// Reaching the requested depth spreads the nested array once and keeps deeper arrays and explicit values intact.
+expectTypeOf<ArrayFlat<readonly [readonly [1, readonly [2]], readonly [3, ...string[], 4]]>>()
+	.toBe<[1, readonly [2], 3, ...string[], 4]>();
+expectTypeOf<ArrayFlat<[readonly [any, unknown, never, null, undefined]]>>().toBe<[any, unknown, never, null, undefined]>();
+expectTypeOf<ArrayFlat<[readonly [1, (2 | undefined)?], readonly [3, 4]]>>().toBe<[1, ...Array<2 | undefined>, 3, 4]>();
+
+function flattenRequiredRow<Value>(value: Value): ArrayFlat<readonly [readonly [Value, Value]]> {
+	return [value, value];
+}
+
+function _readRequiredRow<Value>(value: ArrayFlat<readonly [readonly [Value, Value]]>): Value {
+	return value[0];
+}
+
+const requiredRow = flattenRequiredRow({id: 'row'});
+expectTypeOf(requiredRow[0].id).toBe<string>();
+requiredRow[1] = {id: 'updated'};

@@ -1,0 +1,230 @@
+import type {Sum} from './sum.d.ts';
+import type {LessThanOrEqual} from './less-than-or-equal.d.ts';
+import type {GreaterThanOrEqual} from './greater-than-or-equal.d.ts';
+import type {GreaterThan} from './greater-than.d.ts';
+import type {IsNegative, PositiveInfinity} from './numeric.d.ts';
+import type {HasNoStaticElements, IsArrayReadonly, MaxLength, Not, TupleMin, UnwrapBrand} from './internal/index.d.ts';
+import type {IsEqual} from './is-equal.d.ts';
+import type {And} from './and.d.ts';
+import type {ArraySplice} from './array-splice.d.ts';
+import type {IsNever} from './is-never.d.ts';
+import type {Subtract} from './subtract.d.ts';
+import type {Absolute} from './absolute.d.ts';
+import type {TupleOf} from './tuple-of.d.ts';
+
+/**
+Returns an array slice of a given range, just like `Array#slice()`.
+
+Known limitations:
+- The range is resolved against the longest length a tuple with optional elements can have, so `ArraySlice<[1, 2?], 0, -1>` is `[1]` rather than `[] | [1]`. A shorter tuple is not assignable to the result. Use a union of the possible lengths when the length is not known.
+- A tuple with a rest element is sliced as if the rest element held enough elements, so `ArraySlice<[1, ...string[]], 0, 3>` is `[1, string, string]`, which rejects a shorter array.
+- A fractional index is not supported. `Array#slice()` truncates one toward zero, so `[1, 2, 3].slice(1.5)` is `[2, 3]`, but the range is resolved through the tuple helpers, which have no answer for a decimal, so the result is `never`. Round the index before passing it.
+
+@example
+```
+import type {ArraySlice} from 'type-fest';
+
+type T0 = ArraySlice<[0, 1, 2, 3, 4]>;
+//=> [0, 1, 2, 3, 4]
+
+type T1 = ArraySlice<[0, 1, 2, 3, 4], 0, -1>;
+//=> [0, 1, 2, 3]
+
+type T2 = ArraySlice<[0, 1, 2, 3, 4], 1, -2>;
+//=> [1, 2]
+
+type T3 = ArraySlice<[0, 1, 2, 3, 4], -2, 4>;
+//=> [3]
+
+type T4 = ArraySlice<[0, 1, 2, 3, 4], -2, -1>;
+//=> [3]
+
+type T5 = ArraySlice<[0, 1, 2, 3, 4], 0, -999>;
+//=> []
+
+function arraySlice<
+	const Array_ extends readonly unknown[],
+	Start extends number = 0,
+	End extends number = Array_['length'],
+>(array: Array_, start?: Start, end?: End) {
+	return array.slice(start, end) as ArraySlice<Array_, Start, End>;
+}
+
+const slice = arraySlice([1, '2', {a: 3}, [4, 5]], 0, -1);
+
+type Slice = typeof slice;
+//=> readonly [1, '2', {readonly a: 3}]
+
+const value = slice[2].a;
+//=> 3
+
+// @ts-expect-error -- TS2493: Tuple type 'readonly [1, "2", {readonly a: 3}]' of length '3' has no element at index '3'.
+const invalidIndexAccess = slice[3];
+```
+
+@category Array
+*/
+export type ArraySlice<
+	Array_ extends readonly unknown[],
+	Start extends number = never,
+	End extends number = never,
+> = ArraySliceImplementation<Array_, Start extends object ? UnwrapBrand<Start> : Start, End extends object ? UnwrapBrand<End> : End>;
+
+// Normalize offsets once so tuple counters compare their underlying numeric values.
+type ArraySliceImplementation<
+	Array_ extends readonly unknown[],
+	Start extends number,
+	End extends number,
+> = Array_ extends unknown // To distributive type
+	? IsNever<Start> extends true
+		? IsNever<End> extends true
+			? _ArraySlice<Array_, Start, End>
+			: End extends unknown // To distribute `End`
+				? _ArraySlice<Array_, Start, End>
+				: never // Never happens
+		: IsNever<End> extends true
+			? Start extends unknown // To distribute `Start`
+				? _ArraySlice<Array_, Start, End>
+				: never // Never happens
+			: Start extends unknown // To distribute `Start`
+				? End extends unknown // To distribute `End`
+					? _ArraySlice<Array_, Start, End>
+					: never // Never happens
+				: never // Never happens
+	: never; // Never happens
+
+type _ArraySlice<
+	Array_ extends readonly unknown[],
+	Start extends number = 0,
+	End extends number = Array_['length'],
+> = And<IsEqual<Start, never>, IsEqual<End, never>> extends true
+	? Array_
+	: number extends Array_['length']
+		// An infinite end is past every element, the same as an omitted end, and cannot be counted out element by element.
+		? VariableLengthArraySliceHelper<Array_, IsNever<Start> extends true ? 0 : Start, End extends PositiveInfinity ? never : End>
+		// A non-literal index can be any value, so the slice can start or end anywhere and its length is unknown.
+		: `${number}` extends `${Start | End}`
+			? UnknownLengthArraySlice<Array_>
+			: ArraySliceResult<Array_, ArraySliceHelper<Array_, IsEqual<Start, never> extends true ? 0 : Start, IsEqual<End, never> extends true ? MaxLength<Array_> : End>>;
+
+/**
+`Array#slice()` returns a fresh array, but a `readonly` input keeps its `readonly` modifier, whichever branch produced the slice.
+*/
+type ArraySliceResult<Array_ extends readonly unknown[], Sliced> =
+	IsArrayReadonly<Array_> extends true ? Readonly<Sliced> : Sliced;
+
+type VariableLengthArraySliceHelper<
+	Array_ extends readonly unknown[],
+	Start extends number,
+	End extends number,
+> = And<
+	And<Not<IsNegative<Start>>, Not<IsNegative<End>>>,
+	IsEqual<LessThanOrEqual<End, Start>, true>
+> extends true
+	? ArraySliceResult<Array_, []>
+	: And<Not<IsNegative<Start>>, IsEqual<End, never>> extends true
+		? ArraySplice<Array_, 0, Start>
+		: And<
+			And<Not<IsNegative<Start>>, Not<IsNegative<End>>>,
+			IsEqual<GreaterThan<End, Start>, true>
+		> extends true
+			? HasNoStaticElements<Array_> extends true
+				? UnknownLengthArraySlice<Array_>
+				: ArraySliceResult<Array_, ArraySliceByPositiveIndex<Array_, Start, End>>
+			: UnknownLengthArraySlice<Array_>;
+
+/**
+The result of slicing an array whose length is unknown, so the result can have any length.
+*/
+type UnknownLengthArraySlice<Array_ extends readonly unknown[]> = ArraySliceResult<Array_, Array<Array_[number]>>;
+
+type ArraySliceHelper<
+	Array_ extends readonly unknown[],
+	Start extends number = 0,
+	End extends number = MaxLength<Array_>,
+	ArrayLength extends number = MaxLength<Array_>,
+	// A negative index that points before the start is clamped to `0` before `Sum` is asked, because `Sum` has no answer for a number in exponential notation, like `-1e21`.
+	PositiveS extends number = IsNegative<Start> extends true
+		? GreaterThanOrEqual<Absolute<Start>, ArrayLength> extends true
+			? 0
+			// The magnitude is below the length, so the sum is already a positive in-bounds offset.
+			: Sum<ArrayLength, Start>
+		: Start,
+	PositiveE extends number = IsNegative<End> extends true
+		? GreaterThanOrEqual<Absolute<End>, ArrayLength> extends true
+			? 0
+			: Sum<ArrayLength, End>
+		: End,
+> = true extends [IsNegative<PositiveS>, LessThanOrEqual<PositiveE, PositiveS>, GreaterThanOrEqual<PositiveS, ArrayLength>][number]
+	? []
+	: ArraySliceByPositiveTuple<Array_, TupleMin<[PositiveS, ArrayLength]>, TupleMin<[PositiveE, ArrayLength]>>;
+
+type ArraySliceByPositiveIndex<
+	Array_ extends readonly unknown[],
+	Start extends number,
+	End extends number,
+	Result extends Array<Array_[number]> = [],
+> = Start extends End
+	? Result
+	: ArraySliceByPositiveIndex<Array_, Sum<Start, 1>, End, [...Result, Array_[Start]]>;
+
+/**
+Like {@link ArraySliceByPositiveIndex}, but for arrays of a known length, where it walks the elements with variadic destructuring instead of indexing, so the `?` modifier of optional elements is preserved.
+*/
+type ArraySliceByPositiveTuple<
+	Array_ extends readonly unknown[],
+	Start extends number,
+	End extends number,
+> = (Start extends 0
+	? Array_
+	// Skip a required prefix at once. The exact length check prevents `TupleOf` from truncating a fractional index.
+	: [TupleOf<Start>['length'], Array_] extends [Start, readonly [...TupleOf<Start>, ...infer Remaining]]
+		? Remaining
+		: DropLeadingElements<Array_, Start>) extends infer Dropped extends readonly unknown[]
+	// Compare the copy's length because spreading an intersection can lose its fixed length. A complete remainder needs no element-by-element rebuild.
+	? MaxLength<[...Dropped]> extends Subtract<End, Start>
+		? [...Dropped]
+		: TakeLeadingElements<Dropped, Subtract<End, Start>>
+	: never; // Should never happen
+
+type DropLeadingElements<Array_ extends readonly unknown[], Count extends number, Counter extends unknown[] = []> =
+	Counter['length'] extends Count
+		? Array_
+		: Array_ extends readonly []
+			? never // Only a fractional count runs past the end, since the range is clamped to the length
+			: Array_ extends readonly [(unknown)?, ...infer Rest]
+				? DropLeadingElements<Rest, Count, [...Counter, unknown]>
+				: [];
+
+/**
+Copy a required prefix in one match, falling back to element-wise traversal for optional positions.
+*/
+type TakeLeadingElements<Array_ extends readonly unknown[], Count extends number> =
+	[TupleOf<Count>['length'], Array_] extends [Count, readonly [...TupleOf<Count>, ...infer Rest]]
+		? Array_ extends readonly [...infer Prefix, ...Rest]
+			// Intersections can widen the inferred prefix, so only keep an exact-length match.
+			? Prefix['length'] extends Count ? Prefix : TakeLeadingElementsRecursive<Array_, Count>
+			: never
+		: TakeLeadingElementsRecursive<Array_, Count>;
+
+type TakeLeadingElementsRecursive<Array_ extends readonly unknown[], Count extends number, Result extends unknown[] = [], Counter extends unknown[] = []> =
+	Counter['length'] extends Count
+		? Result
+		: Array_ extends readonly []
+			? never // Only a fractional count runs past the end, since the range is clamped to the length
+			: Array_ extends readonly [(infer First)?, ...infer Rest]
+				? TakeLeadingElementsRecursive<
+					Rest,
+					Count,
+					[
+						...Result,
+						// A tuple allows fewer than one element only when its first element is optional. Written in exactly this shape because equivalent ones, such as `[] extends Array_`, are several times slower.
+						...Array_ extends readonly [unknown, ...unknown[]]
+							? [First]
+							: [First?],
+					],
+					[...Counter, unknown]
+				>
+				: never; // Should never happen
+
+export {};

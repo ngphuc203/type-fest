@@ -1,0 +1,90 @@
+import type {Or} from './or.d.ts';
+import type {ApplyDefaultOptions, AsciiPunctuation, StartsWith, UnwrapBrand} from './internal/index.d.ts';
+import type {IsStringLiteral} from './is-string-literal.d.ts';
+import type {Merge} from './merge.d.ts';
+import type {_DefaultWordsOptions, _Words, WordsOptions} from './words.d.ts';
+import type {KebabCase} from './kebab-case.d.ts'; // For `@link`
+import type {SnakeCase} from './snake-case.d.ts'; // For `@link`
+
+export type _DefaultDelimiterCaseOptions = Merge<_DefaultWordsOptions, {splitOnNumbers: false}>;
+
+/**
+Convert an array of words to delimiter case, lowercasing words while preserving the delimiter.
+*/
+type DelimiterCaseFromArray<
+	WordList extends string[],
+	Delimiter extends string,
+	OutputString extends string = '',
+> = WordList extends [
+	infer FirstWord extends string,
+	...infer RemainingWords extends string[],
+]
+	? DelimiterCaseFromArray<RemainingWords, Delimiter, OutputString extends '' ? Lowercase<FirstWord> : `${OutputString}${
+		// A delimiter is not emitted next to punctuation, or the two double up. `OutputString` ends with the last character of the previous word, so testing it covers the word that ends in punctuation, and `FirstWord` covers the one that begins with it.
+		Or<StartsWith<FirstWord, AsciiPunctuation>, EndsWithPunctuation<OutputString>> extends true
+			? ''
+			: Delimiter
+	}${Lowercase<FirstWord>}`>
+	: OutputString;
+
+/**
+Whether the given string ends in punctuation.
+*/
+type EndsWithPunctuation<String_ extends string> = String_ extends `${string}${AsciiPunctuation}` ? true : false;
+
+/**
+Convert a string literal to a custom string delimiter casing.
+
+This can be useful when, for example, converting a camel-cased object property to an oddly cased one.
+
+@see {@link KebabCase}
+@see {@link SnakeCase}
+
+@example
+```
+import type {DelimiterCase} from 'type-fest';
+
+// Simple
+
+const someVariable: DelimiterCase<'fooBar', '#'> = 'foo#bar';
+const someVariableNoSplitOnNumbers: DelimiterCase<'p2pNetwork', '#', {splitOnNumbers: false}> = 'p2p#network';
+const someVariableWithPunctuation: DelimiterCase<'div.card::after', '#', {splitOnPunctuation: true}> = 'div#card#after';
+
+// Advanced
+
+type OddlyCasedProperties<T> = {
+	[K in keyof T as DelimiterCase<K, '#'>]: T[K]
+};
+
+type SomeOptions = {
+	dryRun: boolean;
+	includeFile: string;
+	foo: number;
+};
+
+const rawCliOptions: OddlyCasedProperties<SomeOptions> = {
+	'dry#run': true,
+	'include#file': 'bar.js',
+	foo: 123,
+};
+```
+
+@category Change case
+@category Template literal
+ */
+export type DelimiterCase<
+	Value,
+	Delimiter extends string,
+	Options extends WordsOptions = {},
+> = Value extends string
+	? Delimiter extends unknown // For distributing `Delimiter`
+		? IsStringLiteral<Value> extends false
+			? Value
+			: DelimiterCaseFromArray<
+				_Words<UnwrapBrand<Value>, ApplyDefaultOptions<WordsOptions, _DefaultDelimiterCaseOptions, Options>>,
+				Delimiter extends object ? UnwrapBrand<Delimiter> : Delimiter
+			>
+		: never
+	: Value;
+
+export {};

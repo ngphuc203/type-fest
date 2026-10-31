@@ -1,0 +1,216 @@
+import {expectTypeOf} from 'nz';
+import type {CamelCaseOptions} from '../source/camel-case.d.ts';
+import type {CamelCasedPropertiesDeep, JsonValue, Tagged} from '../index.d.ts';
+
+declare const foo: CamelCasedPropertiesDeep<{A: {B: number; C: Array<{D: string}>}}>;
+
+expectTypeOf(foo).toBe<{a: {b: number; c: Array<{d: string}>}}>();
+
+declare const fooBar: CamelCasedPropertiesDeep<() => {a: string}>;
+expectTypeOf(fooBar).toBe<() => {a: string}>();
+
+declare const bar: CamelCasedPropertiesDeep<Set<{fooBar: string}>>;
+expectTypeOf(bar).toBe<Set<{fooBar: string}>>();
+
+type bazBizDeep = {fooBAR: number; baz: {fooBAR: Array<{BARFoo: string}>}};
+
+declare const baz: CamelCasedPropertiesDeep<bazBizDeep, {preserveConsecutiveUppercase: true}>;
+expectTypeOf(baz).toBe<{fooBAR: number; baz: {fooBAR: Array<{bARFoo: string}>}}>();
+
+declare const biz: CamelCasedPropertiesDeep<bazBizDeep>;
+expectTypeOf(biz).toBe<{fooBar: number; baz: {fooBar: Array<{barFoo: string}>}}>();
+
+declare const tuple: CamelCasedPropertiesDeep<{tuple: [number, string, {D: string}]}>;
+expectTypeOf(tuple).toBe<{tuple: [number, string, {d: string}]}>();
+
+// Test for leading spread array
+declare const leadingSpreadArray: CamelCasedPropertiesDeep<[...Array<{userId: string}>, {userName: number}, {userAge: number}]>;
+expectTypeOf(leadingSpreadArray).toBe<[...Array<{userId: string}>, {userName: number}, {userAge: number}]>();
+// Test for readonly leading spread array
+declare const readonlyLeadingSpreadArray: CamelCasedPropertiesDeep<readonly [...Array<{userId: string}>, {userName: number}, {userAge: number}]>;
+expectTypeOf(readonlyLeadingSpreadArray).toBe<readonly [...Array<{userId: string}>, {userName: number}, {userAge: number}]>();
+// Test for empty tuples
+declare const emptyTuple: CamelCasedPropertiesDeep<[]>;
+expectTypeOf(emptyTuple).toBe<[]>();
+declare const readonlyEmptyTuple: CamelCasedPropertiesDeep<readonly []>;
+expectTypeOf(readonlyEmptyTuple).toBe<readonly []>();
+
+// Verify example
+type UserRole = Tagged<string, 'Role'>;
+
+type User = {
+	UserId: number;
+	UserName: string;
+	Date: Date;
+	RegExp: RegExp;
+	Role: UserRole;
+};
+
+type UserPunctuated = {
+	'user::id': number;
+	'user::name': string;
+	date: Date;
+	'reg::exp': RegExp;
+	Role: UserRole;
+};
+
+type UserWithFriends = {
+	UserInfo: User;
+	UserFriends: User[];
+};
+
+type UserWithFriendsPunctuated = {
+	'user@info': UserPunctuated;
+	'user#friends': UserPunctuated[];
+};
+
+const role = 'someRole' as UserRole;
+
+const result: CamelCasedPropertiesDeep<UserWithFriends> = {
+	userInfo: {
+		userId: 1,
+		userName: 'Tom',
+		date: new Date(),
+		regExp: /.*/,
+		role,
+	},
+	userFriends: [
+		{
+			userId: 2,
+			userName: 'Jerry',
+			date: new Date(),
+			regExp: /.*/,
+			role,
+		},
+		{
+			userId: 3,
+			userName: 'Spike',
+			date: new Date(),
+			regExp: /.*/,
+			role,
+		},
+	],
+};
+
+expectTypeOf(result).toBe<CamelCasedPropertiesDeep<UserWithFriends>>();
+expectTypeOf(result).toBe<CamelCasedPropertiesDeep<UserWithFriendsPunctuated, {splitOnPunctuation: true}>>();
+
+expectTypeOf<CamelCasedPropertiesDeep<{foo_bar: unknown}>>().toBe<{fooBar: unknown}>();
+expectTypeOf<CamelCasedPropertiesDeep<{foo_bar: {bar_baz: unknown}; biz: unknown}>>().toBe<{fooBar: {barBaz: unknown}; biz: unknown}>();
+
+expectTypeOf<CamelCasedPropertiesDeep<{foo_bar: any}>>().toBe<{fooBar: any}>();
+expectTypeOf<CamelCasedPropertiesDeep<{foo_bar: {bar_baz: any}; biz: any}>>().toBe<{fooBar: {barBaz: any}; biz: any}>();
+
+expectTypeOf<CamelCasedPropertiesDeep<{'foo::bar': unknown}, {splitOnPunctuation: true}>>().toBe<{'fooBar': unknown}>();
+expectTypeOf<CamelCasedPropertiesDeep<{'foo::bar': {'bar@baz': unknown}; biz: unknown}, {splitOnPunctuation: true}>>().toBe<{'fooBar': {'barBaz': unknown}; biz: unknown}>();
+
+expectTypeOf<CamelCasedPropertiesDeep<{_foo_bar: {_baz_qux: string}}, {preserveLeadingUnderscores: true}>>().toBe<{_fooBar: {_bazQux: string}}>();
+expectTypeOf<CamelCasedPropertiesDeep<{__foo_bar: string}, {preserveLeadingUnderscores: true}>>().toBe<{__fooBar: string}>();
+expectTypeOf<CamelCasedPropertiesDeep<{_foo_bar: {_baz_qux: string}}>>().toBe<{fooBar: {bazQux: string}}>();
+
+// Map, Set, and their readonly and weak variants are preserved, with their contents recursed into.
+declare const readonlySet: CamelCasedPropertiesDeep<ReadonlySet<{foo_bar: number}>>;
+expectTypeOf(readonlySet).toBe<ReadonlySet<{fooBar: number}>>();
+
+declare const readonlyMap: CamelCasedPropertiesDeep<ReadonlyMap<{foo_bar: 1}, {baz_qux: 2}>>;
+expectTypeOf(readonlyMap).toBe<ReadonlyMap<{fooBar: 1}, {bazQux: 2}>>();
+
+declare const weakMap: CamelCasedPropertiesDeep<WeakMap<{foo_bar: 1}, string>>;
+expectTypeOf(weakMap).toBe<WeakMap<{fooBar: 1}, string>>();
+
+declare const weakSet: CamelCasedPropertiesDeep<WeakSet<{foo_bar: 1}>>;
+expectTypeOf(weakSet).toBe<WeakSet<{fooBar: 1}>>();
+
+// A tuple with an optional element keeps its `?` modifier, so its length stays fixed.
+declare const tupleWithOptionalTail: CamelCasedPropertiesDeep<[string, number?]>;
+expectTypeOf(tupleWithOptionalTail).toBe<[string, number?]>();
+
+declare const allOptionalTuple: CamelCasedPropertiesDeep<[string?, number?]>;
+expectTypeOf(allOptionalTuple).toBe<[string?, number?]>();
+
+declare const readonlyOptionalTuple: CamelCasedPropertiesDeep<readonly [string, number?]>;
+expectTypeOf(readonlyOptionalTuple).toBe<readonly [string, number?]>();
+
+// Optional elements of the same type keep their `?`, rather than collapsing into a rest element.
+expectTypeOf<CamelCasedPropertiesDeep<[string?, string?]>>().toBe<[string?, string?]>();
+expectTypeOf<CamelCasedPropertiesDeep<[{foo_bar: 1}, {foo_bar: 1}?, {foo_bar: 1}?]>>().toBe<[{fooBar: 1}, {fooBar: 1}?, {fooBar: 1}?]>();
+
+// A plain object with `name` and `message` is structurally an `Error`, but it is data, so it is still converted.
+expectTypeOf<CamelCasedPropertiesDeep<{last_error: {name: string; message: string; error_code: number}}>>().toBe<{lastError: {name: string; message: string; errorCode: number}}>();
+
+// A recursive element type is walked lazily, so it does not become infinitely deep.
+({json: [{a: 1}]}) satisfies CamelCasedPropertiesDeep<{json: JsonValue}>;
+
+// A thenable is a single value like a `Promise`, so it is kept as it is, extra members included.
+expectTypeOf<CamelCasedPropertiesDeep<{foo_bar: PromiseLike<{a_b: 1}> & {extra_key: 1}}>>().toBe<{fooBar: PromiseLike<{a_b: 1}> & {extra_key: 1}}>();
+
+// A DOM node is a single value, so it is kept as is.
+expectTypeOf<CamelCasedPropertiesDeep<{foo_bar: HTMLElement}>>().toBe<{fooBar: HTMLElement}>();
+
+// Generic options cannot delay values that are returned unchanged.
+function _keepValue<Options extends CamelCaseOptions>(value: string): CamelCasedPropertiesDeep<string, Options> {
+	return value;
+}
+
+function _keepCallable<Options extends CamelCaseOptions>(value: () => number): CamelCasedPropertiesDeep<() => number, Options> {
+	return value;
+}
+
+function _keepArray<Options extends CamelCaseOptions>(value: string[]): CamelCasedPropertiesDeep<string[], Options> {
+	return value;
+}
+
+function _keepTuple<Options extends CamelCaseOptions>(value: readonly [string, number?]): CamelCasedPropertiesDeep<readonly [string, number?], Options> {
+	return value;
+}
+
+function _keepMap<Options extends CamelCaseOptions>(value: Map<string, number>): CamelCasedPropertiesDeep<Map<string, number>, Options> {
+	return value;
+}
+
+function _keepSet<Options extends CamelCaseOptions>(value: Set<string>): CamelCasedPropertiesDeep<Set<string>, Options> {
+	return value;
+}
+
+function _keepPromise<Options extends CamelCaseOptions>(value: Promise<string>): {value: CamelCasedPropertiesDeep<Promise<string>, Options>} {
+	return {value};
+}
+
+function _keepUnknown<Options extends CamelCaseOptions>(value: unknown): CamelCasedPropertiesDeep<unknown, Options> {
+	return value;
+}
+
+function _keepLiteral<Options extends CamelCaseOptions>(value: 42): CamelCasedPropertiesDeep<42, Options> {
+	return value;
+}
+
+// Every supported option reaches nested keys, while empty and nonrecursive values stay unchanged.
+expectTypeOf<CamelCasedPropertiesDeep<{_fooBAR: {'__baz::QUX2': 1}}, {preserveConsecutiveUppercase: true; preserveLeadingUnderscores: true; splitOnPunctuation: true; splitOnNumbers: true}>>()
+	.toBe<{_fooBAR: {__bazQUX2: 1}}>();
+expectTypeOf<CamelCasedPropertiesDeep<{userInfo: {nestedValue: 1}}, any>>().toBe<{userInfo: {nestedValue: 1}}>();
+expectTypeOf<CamelCasedPropertiesDeep<{userInfo: {nestedValue: 1}}, never>>().toBe<{userInfo: {nestedValue: 1}}>();
+expectTypeOf<CamelCasedPropertiesDeep<unknown>>().toBe<unknown>();
+expectTypeOf<CamelCasedPropertiesDeep<never>>().toBe<never>();
+// @ts-expect-error Options must describe the supported casing flags.
+type UnknownCasingOptions = CamelCasedPropertiesDeep<{userInfo: 1}, unknown>;
+
+enum CasedField {
+	UserInfo = 'userInfo',
+}
+
+expectTypeOf<CamelCasedPropertiesDeep<{readonly [CasedField.UserInfo]?: {nestedValue: 1}}>>()
+	.toBe<{readonly userInfo?: {nestedValue: 1}}>();
+
+function _keepGenericPromise<Value, Options extends CamelCaseOptions>(value: Promise<Value>): {value: CamelCasedPropertiesDeep<Promise<Value>, Options>} {
+	return {value};
+}
+
+function _keepEmptyObject<Options extends CamelCaseOptions>(value: {}): CamelCasedPropertiesDeep<{}, Options> {
+	return value;
+}
+
+declare const copiedNestedModifiers: CamelCasedPropertiesDeep<{readonly userInfo?: {readonly nestedValue?: number; optionalValue?: number}}>;
+// @ts-expect-error Recursive recasing preserves readonly fields.
+copiedNestedModifiers.userInfo = {nestedValue: 1};
+// @ts-expect-error Optional nested fields do not admit an explicit undefined.
+copiedNestedModifiers.userInfo!.optionalValue = undefined;

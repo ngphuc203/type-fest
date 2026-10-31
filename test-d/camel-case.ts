@@ -1,0 +1,257 @@
+import {expectTypeOf} from 'nz';
+import type {CamelCase, CamelCaseOptions, PascalCase, StringRepeat, Tagged} from '../index.d.ts';
+
+// CamelCase
+const camelFromPascal: CamelCase<'FooBar'> = 'fooBar';
+expectTypeOf(camelFromPascal).toBe<'fooBar'>();
+
+const camelFromKebab: CamelCase<'foo-bar'> = 'fooBar';
+expectTypeOf(camelFromKebab).toBe<'fooBar'>();
+
+const camelFromComplexKebab: CamelCase<'foo-bar-abc-123'> = 'fooBarAbc123';
+expectTypeOf(camelFromComplexKebab).toBe<'fooBarAbc123'>();
+
+const camelFromSpace: CamelCase<'foo bar'> = 'fooBar';
+expectTypeOf(camelFromSpace).toBe<'fooBar'>();
+
+const camelFromSnake: CamelCase<'foo_bar'> = 'fooBar';
+expectTypeOf(camelFromSnake).toBe<'fooBar'>();
+
+const noDelimiterFromMono: CamelCase<'foobar'> = 'foobar';
+expectTypeOf(noDelimiterFromMono).toBe<'foobar'>();
+
+const camelFromMixed: CamelCase<'foo-bar_abc xyzBarFoo'> = 'fooBarAbcXyzBarFoo';
+expectTypeOf(camelFromMixed).toBe<'fooBarAbcXyzBarFoo'>();
+
+const camelFromVendorPrefixedCssProperty: CamelCase<'-webkit-animation'> = 'webkitAnimation';
+expectTypeOf(camelFromVendorPrefixedCssProperty).toBe<'webkitAnimation'>();
+
+const camelFromDoublePrefixedKebab: CamelCase<'--very-prefixed'> = 'veryPrefixed';
+expectTypeOf(camelFromDoublePrefixedKebab).toBe<'veryPrefixed'>();
+
+const camelFromRepeatedSeparators: CamelCase<'foo____bar'> = 'fooBar';
+expectTypeOf(camelFromRepeatedSeparators).toBe<'fooBar'>();
+
+const camelFromUppercase: CamelCase<'FOO'> = 'foo';
+expectTypeOf(camelFromUppercase).toBe<'foo'>();
+
+const camelFromLowercase: CamelCase<'foo'> = 'foo';
+expectTypeOf(camelFromLowercase).toBe<'foo'>();
+
+const camelFromScreamingSnakeCase: CamelCase<'FOO_BAR'> = 'fooBar';
+expectTypeOf(camelFromScreamingSnakeCase).toBe<'fooBar'>();
+
+const camelFromScreamingKebabCase: CamelCase<'FOO-BAR'> = 'fooBar';
+expectTypeOf(camelFromScreamingKebabCase).toBe<'fooBar'>();
+
+// Verifying example
+type CamelCasedProperties<T> = {
+	[K in keyof T as CamelCase<K>]: T[K]
+};
+
+type RawOptions = {
+	'dry-run': boolean;
+	'full_family_name': string;
+	foo: number;
+	BAR: string;
+	QUZ_QUX: number;
+	'OTHER-FIELD': boolean;
+};
+
+({
+	dryRun: true,
+	fullFamilyName: 'bar.js',
+	foo: 123,
+	bar: 'foo',
+	quzQux: 6,
+	otherField: false,
+}) satisfies CamelCasedProperties<RawOptions>;
+
+expectTypeOf<CamelCase<'fooBAR'>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<'fooBAR', {preserveConsecutiveUppercase: true}>>().toBe<'fooBAR'>();
+
+expectTypeOf<CamelCase<'fooBARBiz'>>().toBe<'fooBarBiz'>();
+expectTypeOf<CamelCase<'fooBARBiz', {preserveConsecutiveUppercase: true}>>().toBe<'fooBARBiz'>();
+
+expectTypeOf<CamelCase<'foo BAR-Biz_BUZZ', {preserveConsecutiveUppercase: true}>>().toBe<'fooBARBizBUZZ'>();
+expectTypeOf<CamelCase<'foo BAR-Biz_BUZZ', {preserveConsecutiveUppercase: false}>>().toBe<'fooBarBizBuzz'>();
+expectTypeOf<CamelCase<'foo\tBAR-Biz_BUZZ'>>().toBe<'fooBarBizBuzz'>();
+
+expectTypeOf('string' as string).toBe<CamelCase<string, {preserveConsecutiveUppercase: true}>>();
+expectTypeOf('string' as string).toBe<CamelCase<string>>();
+
+// Test splitOnNumbers option
+expectTypeOf('' as CamelCase<'a1b_text', {splitOnNumbers: false}>).toBe<'a1bText'>();
+expectTypeOf('' as CamelCase<'a1b_text', {splitOnNumbers: true}>).toBe<'a1BText'>();
+expectTypeOf('' as CamelCase<'a1b_text'>).toBe<'a1BText'>();
+
+expectTypeOf('' as CamelCase<'p2pNetwork', {splitOnNumbers: false}>).toBe<'p2pNetwork'>();
+expectTypeOf('' as CamelCase<'p2pNetwork', {splitOnNumbers: true}>).toBe<'p2PNetwork'>();
+
+// Punctuation
+expectTypeOf<CamelCase<'onDialog:close'>>().toBe<'onDialog:close'>();
+expectTypeOf<CamelCase<'foo-bar>>baz'>>().toBe<'fooBar>>baz'>();
+expectTypeOf<CamelCase<'foo-bar::01'>>().toBe<'fooBar::01'>();
+
+expectTypeOf<CamelCase<'onDialog:close', {splitOnPunctuation: true}>>().toBe<'onDialogClose'>();
+expectTypeOf<CamelCase<'foo-bar>>baz', {splitOnPunctuation: true}>>().toBe<'fooBarBaz'>();
+expectTypeOf<CamelCase<'fooBAR:biz', {splitOnPunctuation: true; preserveConsecutiveUppercase: true}>>().toBe<'fooBARBiz'>();
+expectTypeOf<CamelCase<'foo-bar::01', {splitOnPunctuation: true}>>().toBe<'fooBar01'>();
+expectTypeOf<CamelCase<'foo-bar::01', {splitOnPunctuation: true; splitOnNumbers: false}>>().toBe<'fooBar01'>();
+expectTypeOf<CamelCase<'foo-bar::01', {splitOnPunctuation: true; splitOnNumbers: true}>>().toBe<'fooBar01'>();
+
+expectTypeOf<CamelCase<'foo_bar', {preserveLeadingUnderscores: true}>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<'_foo_bar', {preserveLeadingUnderscores: true}>>().toBe<'_fooBar'>();
+expectTypeOf<CamelCase<'__foo_bar', {preserveLeadingUnderscores: true}>>().toBe<'__fooBar'>();
+expectTypeOf<CamelCase<'_FOO_BAR', {preserveLeadingUnderscores: true}>>().toBe<'_fooBar'>();
+expectTypeOf<CamelCase<'__FOO_BAR', {preserveLeadingUnderscores: true}>>().toBe<'__fooBar'>();
+expectTypeOf<CamelCase<'_foo-bar', {preserveLeadingUnderscores: true}>>().toBe<'_fooBar'>();
+expectTypeOf<CamelCase<'_fooBAR', {preserveLeadingUnderscores: true; preserveConsecutiveUppercase: true}>>().toBe<'_fooBAR'>();
+expectTypeOf<CamelCase<'_foo_bar'>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<'_foo_bar', {preserveLeadingUnderscores: false}>>().toBe<'fooBar'>();
+
+// Non-literal string types are passed through unchanged, like `DelimiterCase` does.
+expectTypeOf<Uppercase<string>>().toBe<CamelCase<Uppercase<string>>>();
+expectTypeOf<Lowercase<string>>().toBe<CamelCase<Lowercase<string>>>();
+expectTypeOf<`${string}abc`>().toBe<CamelCase<`${string}abc`>>();
+expectTypeOf<`on${string}`>().toBe<CamelCase<`on${string}`>>();
+expectTypeOf<string>().toBe<CamelCase<string>>();
+
+// A string that is entirely uppercase is lowercased before it is split into words, so `preserveConsecutiveUppercase` has no effect on it. See the docs.
+expectTypeOf<CamelCase<'FOO_BAR', {preserveConsecutiveUppercase: true}>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<'FOO_BAR', {preserveConsecutiveUppercase: false}>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<'FOO-BAR', {preserveConsecutiveUppercase: true}>>().toBe<'fooBar'>();
+
+// The option does apply to a string that is not entirely uppercase.
+expectTypeOf<CamelCase<'foo BAR-Biz_BUZZ', {preserveConsecutiveUppercase: true}>>().toBe<'fooBARBizBUZZ'>();
+
+// A branded or tagged string is still a finite string literal, so it is converted like any other.
+expectTypeOf<CamelCase<Tagged<'foo-bar', 'x'>>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<Tagged<'FooBar', 'x'>>>().toBe<'fooBar'>();
+
+// The first word is only uncapitalized, so a character whose uppercase form is more than one character, such as `ß` or the `ﬁ` ligature, is kept there, like the `camelcase` package does.
+expectTypeOf<CamelCase<'ß'>>().toBe<'ß'>();
+expectTypeOf<CamelCase<'ß-bar'>>().toBe<'ßBar'>();
+expectTypeOf<CamelCase<'ﬁeld'>>().toBe<'ﬁeld'>();
+expectTypeOf<CamelCase<'ﬁ-x'>>().toBe<'ﬁX'>();
+expectTypeOf<CamelCase<'ﬄx'>>().toBe<'ﬄx'>();
+
+// A later word is capitalized in full, so the same character expands there, like `camelcase` and `change-case` do.
+expectTypeOf<CamelCase<'a-ßb'>>().toBe<'aSSb'>();
+expectTypeOf<CamelCase<'a-ﬁx'>>().toBe<'aFIx'>();
+expectTypeOf<PascalCase<'a-ßb'>>().toBe<'ASSb'>();
+
+// `PascalCase` capitalizes the first word too, so it expands there.
+expectTypeOf<PascalCase<'ß'>>().toBe<'SS'>();
+expectTypeOf<PascalCase<'ﬁeld'>>().toBe<'FIeld'>();
+
+// A word is capitalized whatever script it is in.
+expectTypeOf<CamelCase<'a-écaille'>>().toBe<'aÉcaille'>();
+expectTypeOf<CamelCase<'a-à-vache'>>().toBe<'aÀVache'>();
+expectTypeOf<CamelCase<'ǆ-dz'>>().toBe<'ǆDz'>();
+expectTypeOf<CamelCase<'a-öcaille'>>().toBe<'aÖcaille'>();
+expectTypeOf<CamelCase<'a-жcaille'>>().toBe<'aЖcaille'>();
+expectTypeOf<CamelCase<'a-αcaille'>>().toBe<'aΑcaille'>();
+expectTypeOf<CamelCase<'a-бcaille'>>().toBe<'aБcaille'>();
+
+// A word whose first character has no uppercase form is left as it is, in every script, the same way an ASCII digit or punctuation mark is.
+expectTypeOf<CamelCase<'a-אcaille'>>().toBe<'aאcaille'>();
+expectTypeOf<CamelCase<'a-한caille'>>().toBe<'a한caille'>();
+expectTypeOf<CamelCase<'a-بcaille'>>().toBe<'aبcaille'>();
+
+// A branded string that is entirely uppercase is pre-lowered like the same string without the brand, so the entirely-uppercase rule applies to it too and the option has no effect on it.
+expectTypeOf<CamelCase<'FOO_BAR' & {readonly __brand: 'x'}, {preserveConsecutiveUppercase: true}>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<Tagged<'FOO_BAR', 'x'>, {preserveConsecutiveUppercase: true}>>().toBe<'fooBar'>();
+
+// The leading underscores are read from the string itself, so all of them are kept.
+expectTypeOf<CamelCase<'__FOO_BAR' & {readonly __brand: 'x'}, {preserveConsecutiveUppercase: true; preserveLeadingUnderscores: true}>>().toBe<'__fooBar'>();
+
+// Repeated tags still allow the underlying string to be split and pre-lowered.
+expectTypeOf<CamelCase<Tagged<Tagged<'foo-bar', 'Text'>, 'Validated'>>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<Tagged<Tagged<'__FOO_BAR', 'Text'>, 'Validated'>, {preserveLeadingUnderscores: true}>>().toBe<'__fooBar'>();
+
+// Unspecified options use the same defaults before every part of the transformation.
+expectTypeOf<CamelCase<'_foo_bar', never>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<'_foo_bar', any>>().toBe<'fooBar'>();
+
+expectTypeOf<CamelCase<'__fooBAR_baz', {preserveLeadingUnderscores: true; preserveConsecutiveUppercase: true}>>().toBe<'__fooBARBaz'>();
+expectTypeOf<CamelCase<'__fooBAR_baz', {preserveLeadingUnderscores: false; preserveConsecutiveUppercase: true}>>().toBe<'fooBARBaz'>();
+expectTypeOf<CamelCase<'__fooBAR_baz', {preserveLeadingUnderscores: true; preserveConsecutiveUppercase: false}>>().toBe<'__fooBarBaz'>();
+expectTypeOf<CamelCase<'__fooBAR_baz', {preserveLeadingUnderscores: false; preserveConsecutiveUppercase: false}>>().toBe<'fooBarBaz'>();
+expectTypeOf<CamelCase<'__p2p:network', {preserveLeadingUnderscores: true; splitOnNumbers: true; splitOnPunctuation: true}>>().toBe<'__p2PNetwork'>();
+expectTypeOf<CamelCase<'__p2p:network', {preserveLeadingUnderscores: true; splitOnNumbers: false; splitOnPunctuation: true}>>().toBe<'__p2pNetwork'>();
+expectTypeOf<CamelCase<'__p2p:network', {preserveLeadingUnderscores: true; splitOnNumbers: true; splitOnPunctuation: false}>>().toBe<'__p2P:network'>();
+expectTypeOf<CamelCase<'__p2p:network', {preserveLeadingUnderscores: true; splitOnNumbers: false; splitOnPunctuation: false}>>().toBe<'__p2p:network'>();
+expectTypeOf<CamelCase<Tagged<'__fooBAR', 'Text'>, {preserveLeadingUnderscores: true; preserveConsecutiveUppercase: true}>>().toBe<'__fooBAR'>();
+expectTypeOf<CamelCase<'__FOO_BAR', never>>().toBe<'fooBar'>();
+expectTypeOf<CamelCase<'__foo_bar' | '__on_change', any>>().toBe<'fooBar' | 'onChange'>();
+expectTypeOf<CamelCase<'_', never>>().toBe<''>();
+expectTypeOf<CamelCase<string, never>>().toBe<string>();
+expectTypeOf<CamelCase<Tagged<string, 'Text'>, any>>().toBe<Tagged<string, 'Text'>>();
+expectTypeOf<CamelCase<any, never>>().toBe<any>();
+expectTypeOf<CamelCase<never, any>>().toBe<never>();
+expectTypeOf<CamelCase<unknown, never>>().toBe<unknown>();
+
+// Entirely uppercase inputs are pre-lowered regardless of the acronym strategy.
+expectTypeOf<CamelCase<'FOO_BAR', {preserveConsecutiveUppercase: true} | {preserveConsecutiveUppercase: false}>>().toBe<'fooBar'>();
+type CasingStrategies = {preserveLeadingUnderscores: true} | {preserveConsecutiveUppercase: true};
+expectTypeOf<CamelCase<string, CasingStrategies>>().toBe<string>();
+expectTypeOf<CamelCase<unknown, CasingStrategies>>().toBe<unknown>();
+expectTypeOf<CamelCase<any, CasingStrategies>>().toBe<any>();
+expectTypeOf<CamelCase<never, CasingStrategies>>().toBe<never>();
+// @ts-expect-error - Options must describe casing.
+expectTypeOf<CamelCase<'foo-bar', unknown>>();
+
+expectTypeOf<CamelCase<'_foo', {preserveLeadingUnderscores: any}>>().toBe<'foo'>();
+// A non-literal preservation flag resolves like the default.
+expectTypeOf<CamelCase<'_foo', {preserveLeadingUnderscores: boolean}>>().toBe<'foo'>();
+// @ts-expect-error Unknown is not a preservation flag.
+expectTypeOf<CamelCase<'foo', {preserveLeadingUnderscores: unknown}>>();
+
+// Resolved casing options also govern word splitting when the input has multiple tags.
+expectTypeOf<CamelCase<Tagged<Tagged<'__user2ID:ready', 'Text'>, 'Validated'>, {preserveLeadingUnderscores: true; preserveConsecutiveUppercase: true; splitOnNumbers: false; splitOnPunctuation: true}>>().toBe<'__user2IDReady'>();
+
+function _readCamelCaseWithOptions<Value extends string, Options extends CamelCaseOptions>(value: CamelCase<Value, Options>): string {
+	return value;
+}
+
+// A broad string return remains usable without assuming the unresolved preservation policy.
+function _readUnresolvedUnderscore<Preserve extends boolean>(value: CamelCase<'_foo', {preserveLeadingUnderscores: Preserve}>): string {
+	return value;
+}
+
+expectTypeOf<CamelCase<'_foo', {preserveLeadingUnderscores: true}>>().toBe<'_foo'>();
+
+// Unresolved acronym preservation is also safe to read through the general string constraint.
+function _readUnresolvedAcronym<Preserve extends boolean>(value: CamelCase<'fooBAR', {preserveConsecutiveUppercase: Preserve}>): string {
+	return value;
+}
+
+expectTypeOf<'_foo'>().not.toBeAssignableTo<CamelCase<'_foo', {preserveLeadingUnderscores: false}>>();
+expectTypeOf<'fooBAR'>().not.toBeAssignableTo<CamelCase<'fooBAR', {preserveConsecutiveUppercase: false}>>();
+
+// These spellings are invariant across every supported option strategy.
+function _readInvariantCamelWords<Options extends CamelCaseOptions>(value: CamelCase<'foo-bar', Options>): 'fooBar' {
+	return value;
+}
+
+function _readInvariantUppercaseWords<Options extends CamelCaseOptions>(value: CamelCase<'FOO_BAR', Options>): 'fooBar' {
+	return value;
+}
+
+// A constrained disabled policy preserves the exact spelling even when the options object stays generic.
+function _readKnownDisabledUnderscores<Options extends {preserveLeadingUnderscores: false}>(value: CamelCase<'_foo', Options>): 'foo' {
+	return value;
+}
+
+// String enum members are converted by their values, also when tagged.
+enum FieldName {
+	DisplayName = 'display_name',
+	ApiKey = 'API_KEY',
+}
+
+expectTypeOf<CamelCase<FieldName>>().toBe<'displayName' | 'apiKey'>();
+expectTypeOf<CamelCase<Tagged<FieldName.DisplayName, 'Field'>>>().toBe<'displayName'>();
+
+// Long identifiers keep the word splitter within its recursion budget.
+expectTypeOf<CamelCase<StringRepeat<'ab_', 300>>>().toBe<`ab${StringRepeat<'Ab', 299>}`>();

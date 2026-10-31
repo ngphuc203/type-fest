@@ -1,0 +1,50 @@
+import type {KeySelector, SelectedKeyAlias, SelectedKeys, UnwrapPathBrand} from './internal/index.d.ts';
+import type {KeysOfUnion} from './keys-of-union.d.ts';
+import type {SetNonNullable} from './set-non-nullable.d.ts'; // For `@link`
+
+/**
+Create a type that makes the given keys nullable, while keeping the remaining keys as is.
+
+If no keys are given, all keys will be made nullable.
+
+This adds `null` to the value type. Use `SetOptional` to make keys optional instead.
+
+Note: A numeric key does not reach the rest element of a tuple or any element after it, such as `string[]` and `boolean` in `[number, ...string[], boolean]`. Use `number` to make every element nullable.
+
+Use-case: You want to define a single model where the only thing that changes is whether or not some or all of the keys are nullable.
+
+@example
+```
+import type {SetNullable} from 'type-fest';
+
+type Foo = {
+	a: number;
+	b: string;
+	c?: boolean;
+};
+
+type SomeNullable = SetNullable<Foo, 'a' | 'c'>; // Optionality is preserved for `c`
+//=> {a: number | null; b: string; c?: boolean | null}
+
+type AllNullable = SetNullable<Foo>;
+//=> {a: number | null; b: string | null; c?: boolean | null}
+```
+
+@see {@link SetNonNullable}
+
+@category Object
+*/
+export type SetNullable<BaseType, Keys extends KeysOfUnion<BaseType> = KeysOfUnion<BaseType>> =
+	SetNullableImplementation<BaseType, KeySelector<UnwrapPathBrand<Keys>>>;
+
+// A homomorphic mapped type over a type parameter is applied to each member of a union on its own, so a key that only some members have reaches those members.
+type SetNullableImplementation<BaseType, Keys> = {
+	// Tuple elements use string indices, so look up their canonical numeric aliases in the selector, which matches each union member by its own spelling. Other numeric-looking names, like '01', stay distinct.
+	[Key in keyof BaseType]: Key extends SelectedKeys<BaseType, Keys>
+		? BaseType[Key] | null
+		: [SelectedKeyAlias<Keys, Key>] extends [never]
+			? BaseType[Key]
+			: BaseType[Key] | null;
+};
+
+export {};

@@ -1,0 +1,227 @@
+import {expectTypeOf} from 'nz';
+import type {KeysOfUnion, Writable} from '../index.d.ts';
+
+type Foo = {
+	readonly a: number;
+	readonly b: string;
+};
+
+const ab: Writable<Foo> = {a: 1, b: '2'};
+ab.a = 2;
+const ab2: Writable<Readonly<Foo>> = ab;
+ab2.a = 2;
+
+// Update one writable and one readonly to writable, leaving one property unaffected.
+declare const variation1: Writable<{readonly a: number; b: string; readonly c: boolean}, 'b' | 'c'>;
+expectTypeOf(variation1).toBe<{readonly a: number; b: string; c: boolean}>();
+
+// Update two readonly to writable, leaving one property unaffected.
+declare const variation2: Writable<{readonly a: number; readonly b: string; readonly c: boolean}, 'a' | 'b'>;
+expectTypeOf(variation2).toBe<{a: number; b: string; readonly c: boolean}>();
+
+// Three writable remain writable.
+declare const variation3: Writable<{a: number; b: string; c: boolean}, 'a' | 'b' | 'c'>;
+expectTypeOf(variation3).toBe<{a: number; b: string; c: boolean}>();
+
+// Check if type changes raise an error even if readonly and writable are applied correctly.
+declare const variation4: Writable<{readonly a: number; b: string; readonly c: boolean}, 'b' | 'c'>;
+expectTypeOf(variation4).not.toBeAssignableTo<{readonly a: boolean; b: string; c: boolean}>();
+
+// Test array
+declare const variation5: Writable<readonly string[]>;
+expectTypeOf(variation5).toBe<string[]>();
+
+// Test tuple
+declare const variation8: Writable<readonly [string, number]>;
+expectTypeOf(variation8).toBe<[string, number]>();
+
+// Test tuple with spread
+declare const variation6: Writable<readonly [...string[], number]>;
+expectTypeOf(variation6).toBe<[...string[], number]>();
+declare const variation7: Writable<readonly [string, ...number[]]>;
+expectTypeOf(variation7).toBe<[string, ...number[]]>();
+
+// Test tuple with optional elements
+declare const variation14: Writable<readonly [string?, number?]>;
+expectTypeOf(variation14).toBe<[string?, number?]>();
+declare const variation15: Writable<readonly [string, number?]>;
+expectTypeOf(variation15).toBe<[string, number?]>();
+declare const variation16: Writable<readonly [string?, ...number[]]>;
+expectTypeOf(variation16).toBe<[string?, ...number[]]>();
+
+// Test readonly set
+declare const variation9: Writable<ReadonlySet<string>>;
+expectTypeOf(variation9).toBe<Set<string>>();
+
+// Test readonly map
+declare const variation10: Writable<ReadonlyMap<string, number>>;
+expectTypeOf(variation10).toBe<Map<string, number>>();
+
+// Only strip `readonly` without otherwise changing the structure, so an index signature is preserved (https://github.com/sindresorhus/type-fest/issues/717).
+declare const variation11: Writable<{readonly [key: string]: number}>;
+expectTypeOf(variation11).toBe<{[key: string]: number}>();
+
+// Preserve an index signature alongside named keys while stripping `readonly`.
+declare const variation12: Writable<{readonly [key: string]: number; readonly foo: number}>;
+expectTypeOf(variation12).toBe<{[key: string]: number; foo: number}>();
+
+declare const variation13: Writable<{readonly [key: string]: number; readonly foo: number}, 'foo'>;
+expectTypeOf(variation13).toBe<{readonly [key: string]: number; foo: number}>();
+
+// `Readonly<T>` distributes over a union, so `Writable` is its inverse and must too. Without it, `keyof` of the union is the intersection of the members' keys, which is empty here, so neither member is touched.
+declare const union: Writable<{readonly a: number} | {readonly b: number}>;
+expectTypeOf(union).toBe<{a: number} | {b: number}>();
+
+declare const single: Writable<{readonly a: number}>;
+expectTypeOf(single).toBe<{a: number}>();
+
+// The members share a key, so `keyof` of the union is that key alone, but every key of each member must still be made writable, because the default key set means all of them.
+declare const overlappingUnion: Writable<{readonly a: number} | {readonly a: number; readonly b: string}>;
+expectTypeOf(overlappingUnion).toBe<{a: number} | {a: number; b: string}>();
+
+// `Readonly<T>` distributes over a union, so `Writable` is its inverse and has to round-trip.
+declare const roundTrip: Writable<Readonly<{a: number} | {a: number; b: string}>>;
+expectTypeOf(roundTrip).toBe<{a: number} | {a: number; b: string}>();
+
+// An explicit key set is still narrowed to just those keys.
+declare const selected: Writable<{readonly a: number; readonly b: string; readonly c: boolean}, 'b' | 'c'>;
+expectTypeOf(selected).toBe<{readonly a: number; b: string; c: boolean}>();
+
+// A key that only one member of a union has is still a key of that member, and the type distributes over the union anyway, so it should be accepted. `keyof` of a union is the intersection of its members' keys, so the constraint rejected it and the user got a type error instead of a result.
+declare const keyOfOneMember: Writable<{readonly a: 1} | {readonly b: 2}, 'a'>;
+expectTypeOf(keyOfOneMember).toBe<{a: 1} | {readonly b: 2}>();
+
+declare const keyOfTheOtherMember: Writable<{readonly a: 1} | {readonly b: 2}, 'b'>;
+expectTypeOf(keyOfTheOtherMember).toBe<{readonly a: 1} | {b: 2}>();
+
+// A union whose members share a key still makes that one key, and the default is still every key.
+declare const sharedKey: Writable<{readonly a: 1} | {readonly a: 2}>;
+expectTypeOf(sharedKey).toBe<{a: 1} | {a: 2}>();
+
+// A method that mutates its own readonly member, which is the pattern the `Writable` documentation points at. `keyof this` is not a concrete key set while the class is being checked, so the result has to resolve anyway: intersecting two mapped types over `this` never resolves, and the member came out as missing instead of writable.
+class Repository {
+	readonly items: string[] = [];
+
+	add(item: string) {
+		(this as Writable<this>).items = [...this.items, item];
+	}
+}
+
+// A key set that names every key is the same request as naming none, whether it was passed in explicitly or left to the default.
+type EveryKey = {readonly a: number; b: string};
+declare const explicitEveryKey: Writable<EveryKey, KeysOfUnion<EveryKey>>;
+expectTypeOf(explicitEveryKey).toBe<{a: number; b: string}>();
+
+declare const implicitEveryKey: Writable<EveryKey>;
+expectTypeOf(implicitEveryKey).toBe<{a: number; b: string}>();
+
+// `any` stays `any`, with or without keys.
+expectTypeOf<Writable<any>>().toBe<any>();
+expectTypeOf<Writable<any, 'a'>>().toBe<any>();
+
+// Passing `never` as the keys changes no keys, the same as for `SetReadonly`, `SetOptional`, and `Except`.
+declare const neverKeys: Writable<{readonly a: 1; readonly b: 2}, never>;
+expectTypeOf(neverKeys).toBe<{readonly a: 1; readonly b: 2}>();
+
+// A `symbol` key set changes only the symbol keys, so it is not mistaken for the default that stands for every key.
+declare const symbolKeys: Writable<{readonly [key: symbol]: 2; readonly a: 1}, symbol>;
+expectTypeOf(symbolKeys).toBe<{[key: symbol]: 2; readonly a: 1}>();
+
+// Making outer fields writable preserves optionality and the readonly values they contain.
+type ShallowWritableModel = {readonly id: number; readonly settings?: {readonly enabled: boolean}; readonly callback: (input: string) => number};
+declare const shallowWritable: Writable<ShallowWritableModel>;
+expectTypeOf(shallowWritable).toBe<{id: number; settings?: {readonly enabled: boolean}; callback: (input: string) => number}>();
+shallowWritable.id = 2;
+shallowWritable.settings = {enabled: true};
+// @ts-expect-error Nested values keep their own readonly fields.
+shallowWritable.settings.enabled = false;
+expectTypeOf(shallowWritable.callback('value')).toBe<number>();
+
+// A numeric index and a named optional field retain their own value types.
+expectTypeOf<Writable<{readonly [key: number]: string; readonly label?: string}>>()
+	.toBe<{[key: number]: string; label?: string}>();
+
+declare const writableProperty: unique symbol;
+expectTypeOf<Writable<{readonly [writableProperty]?: string; readonly 0: number}>>()
+	.toBe<{[writableProperty]?: string; 0: number}>();
+
+// The default path preserves its broad and nullish boundaries.
+expectTypeOf<Writable<never>>().toBe<never>();
+expectTypeOf<Writable<unknown>>().toBe<{}>();
+expectTypeOf<Writable<null>>().toBe<null>();
+expectTypeOf<Writable<undefined>>().toBe<undefined>();
+
+function _updateGenericCount<Value extends {readonly count: number}>(value: Writable<Value>): number {
+	value.count += 1;
+	return value.count;
+}
+
+// Optional impossible fields remain present in the key set rather than disappearing.
+expectTypeOf<Writable<{readonly impossible?: never; readonly value: unknown}>>()
+	.toBe<{impossible?: never; value: unknown}>();
+expectTypeOf<keyof Writable<{readonly impossible?: never; readonly value: unknown}>>().toBe<'impossible' | 'value'>();
+
+// Selecting no keys must not add mutating collection methods.
+expectTypeOf<Writable<readonly string[], never>>().toBe<readonly string[]>();
+expectTypeOf<Writable<ReadonlyMap<string, number>, never>>().toBe<ReadonlyMap<string, number>>();
+expectTypeOf<Writable<ReadonlySet<string>, never>>().toBe<ReadonlySet<string>>();
+declare const unchangedReadonlyArray: Writable<readonly string[], never>;
+// @ts-expect-error No key was selected, so array mutation is still unavailable.
+unchangedReadonlyArray[0] = 'item';
+
+// Empty selection preserves tuple positions and metadata without changing container access.
+type ReadonlyTupleWithMetadata = readonly [1, 2?] & {readonly label: 'row'};
+expectTypeOf<Writable<ReadonlyTupleWithMetadata, never>>().toBe<ReadonlyTupleWithMetadata>();
+expectTypeOf<Writable<ReadonlyMap<string, number> | null, never>>().toBe<ReadonlyMap<string, number> | null>();
+expectTypeOf<Writable<readonly number[] | number, never>>().toBe<readonly number[] | number>();
+// A nonempty selection still converts a container even when the named key belongs to another union member.
+expectTypeOf<Writable<ReadonlySet<string> | {readonly id: 1}, 'id'>>().toBe<Set<string> | {id: 1}>();
+expectTypeOf<Writable<any, never>>().toBe<any>();
+expectTypeOf<Writable<never, never>>().toBe<never>();
+expectTypeOf<Writable<unknown, never>>().toBe<{}>();
+
+class ReadonlyNamedModel {
+	readonly id?: number;
+}
+
+function _readSealedEmptySelection(value: Writable<ReadonlyNamedModel, never>): Record<string, unknown> {
+	return value;
+}
+
+function unchangedTuple<const Value>(value: readonly [Value]): Writable<readonly [Value], never> {
+	return value;
+}
+
+const unchangedInferredTuple = unchangedTuple([{id: 'row'}]);
+expectTypeOf(unchangedInferredTuple).toBe<readonly [{readonly id: 'row'}]>();
+// @ts-expect-error No key was selected, so the inferred tuple remains readonly.
+unchangedInferredTuple[0] = {id: 'row'};
+
+// A numeric enum member selects its declared key, not the whole `number` index signature.
+enum NumericField {
+	Zero,
+}
+
+expectTypeOf<Writable<{readonly [key: number]: string; readonly 0: 'zero'}, NumericField.Zero>>().toBe<{readonly [key: number]: string; 0: 'zero'}>();
+
+// Both forms of polymorphic this preserve a generic field's type while allowing internal replacement (#1515).
+class GenericReadonlyModel<Value> {
+	constructor(readonly value: Value) {}
+
+	replace(value: Value) {
+		(this as Writable<this>).value = value;
+		(this as Writable<typeof this>).value = value;
+		// @ts-expect-error The transformed field still requires Value, which need not accept undefined.
+		(this as Writable<this>).value = undefined;
+		// @ts-expect-error The typeof this form also preserves Value.
+		(this as Writable<typeof this>).value = undefined;
+	}
+}
+
+const genericReadonlyModel = new GenericReadonlyModel({name: 'original'});
+genericReadonlyModel.replace({name: 'updated'});
+expectTypeOf(genericReadonlyModel.value).toBe<{name: string}>();
+// @ts-expect-error Internal mutability does not make the public field writable.
+genericReadonlyModel.value = {name: 'outside'};
+// @ts-expect-error Removing readonly does not change the generic field's value type.
+genericReadonlyModel.replace({name: 1});

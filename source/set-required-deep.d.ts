@@ -1,0 +1,62 @@
+import type {IsAny} from './is-any.d.ts';
+import type {DeepSubPaths, DeepTerminalKeys, NonRecursiveType, UnwrapPathBrand} from './internal/index.d.ts';
+import type {LiteralUnion} from './literal-union.d.ts';
+import type {Paths} from './paths.d.ts';
+import type {SetRequired} from './set-required.d.ts';
+import type {RequiredDeep} from './required-deep.d.ts';
+
+/**
+Create a type that makes the given keys required, with support for deeply nested key paths, while keeping the remaining keys as is.
+
+Use-case: Selectively make nested properties required in complex types like models.
+
+Note: A path that does not exist is not a type error, so that paths deeper than `Paths` lists can be used. A missing path is ignored. A non-literal path segment, such as `string`, matches every key at its level, like a path through an index signature.
+
+@example
+```
+import type {SetRequiredDeep} from 'type-fest';
+
+type Foo = {
+	a?: number;
+	b?: string;
+	c?: Array<{
+		d?: number;
+	}>;
+};
+
+type SomeRequiredDeep = SetRequiredDeep<Foo, 'a' | `c.${number}.d`>;
+//=> {b?: string; c?: {d: number}[]; a: number}
+
+// Set specific indices in an array to be required.
+type ArrayExample = SetRequiredDeep<{a: [number?, number?, number?]}, 'a.0' | 'a.1'>;
+//=> {a: [number, number, number?]}
+```
+
+@category Object
+*/
+export type SetRequiredDeep<
+	BaseType,
+	// Autocomplete lists paths up to `a.b.c`, because listing deeper paths can take minutes for large union-heavy types. A generic `Paths<T>` can be a `number`, so any `number` is accepted, like any `string`.
+	KeyPaths extends LiteralUnion<Paths<BaseType, {maxRecursionDepth: 2}>, string | number>,
+> = IsAny<KeyPaths> extends true
+	? RequiredDeep<BaseType> // `RequiredDeep` already flattens its object nodes.
+	: SetRequiredDeepHelper<BaseType, UnwrapPathBrand<KeyPaths>>;
+
+/**
+Internal helper for {@link SetRequiredDeep}.
+
+Recursively transforms the `BaseType` by applying all terminal keys together at each level, so the order of members in `KeyPaths` cannot affect tuple optionality.
+*/
+type SetRequiredDeepHelper<BaseType, KeyPaths> =
+	[KeyPaths] extends [never]
+		? BaseType
+		: BaseType extends NonRecursiveType
+			? BaseType
+			: [DeepTerminalKeys<KeyPaths, BaseType>] extends [never]
+				// Intermediate nodes only need their descendants transformed, so skip the no-op shallow setter.
+				? {[Key in keyof BaseType]: SetRequiredDeepHelper<BaseType[Key], DeepSubPaths<KeyPaths, Key, BaseType>>}
+				: SetRequired<{
+					[Key in keyof BaseType]: SetRequiredDeepHelper<BaseType[Key], DeepSubPaths<KeyPaths, Key, BaseType>>;
+				}, DeepTerminalKeys<KeyPaths, BaseType>>;
+
+export {};

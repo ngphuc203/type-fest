@@ -1,0 +1,43 @@
+import type {IsAny} from './is-any.d.ts';
+import type {Join} from './join.d.ts';
+import type {ArraySlice} from './array-slice.d.ts';
+import type {StringToArray} from './string-to-array.d.ts';
+
+/**
+Returns a string slice of a given range.
+
+Note: Slicing supplementary Unicode characters, such as emoji, depends on the TypeScript compiler and is not guaranteed to match JavaScript’s UTF-16 indexing in `String#slice()`.
+
+@see {@link ArraySlice}
+
+@example
+```
+import type {StringSlice} from 'type-fest';
+
+type A = StringSlice<'abcde', 0, 2>;
+//=> 'ab'
+
+type B = StringSlice<'abcde', 1>;
+//=> 'bcde'
+
+type C = StringSlice<'abcde', 0, -1>;
+//=> 'abcd'
+
+type D = StringSlice<'abcde', -2, -1>;
+//=> 'd'
+```
+
+@category String
+*/
+export type StringSlice<
+	S extends string,
+	Start extends number = never,
+	End extends number = never,
+> = IsAny<S> extends true
+	? string
+	// ArraySlice can resolve empty ranges even when the input text is unknown.
+	: ArraySlice<StringToArray<S>, Start, End> extends infer R extends readonly string[]
+		? Join<R, ''>
+		: never;
+
+export {};

@@ -1,0 +1,1227 @@
+import {expectTypeOf} from 'nz';
+import type {
+	EmptyObject,
+	Flavor,
+	Jsonifiable,
+	Jsonify,
+	JsonArray,
+	JsonObject,
+	JsonValue,
+	LiteralToPrimitiveDeep,
+	NegativeInfinity,
+	Opaque,
+	PositiveInfinity,
+	Tagged,
+	TupleOf,
+	TypedArray,
+} from '../index.d.ts';
+
+// An interface has no implicit index signature, so this checks that `Jsonify` makes it assignable to `JsonValue`.
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface A {
+	a: number;
+}
+
+class B {
+	a!: number;
+}
+
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface V {
+	a?: number;
+}
+
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface U extends JsonObject {
+	a: number;
+	b?: string; // Allowed because `exactOptionalPropertyTypes` is enabled
+}
+
+// Extending `JsonObject` still checks that the properties are JSON values.
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface NonJsonInterface extends JsonObject {
+	// @ts-expect-error
+	a: Date;
+}
+
+type X = {
+	a: Date;
+};
+
+type Y = {
+	a?: Date;
+};
+
+type Z = {
+	a: number | undefined;
+};
+
+type W = {
+	a?: () => any;
+};
+
+declare const a: Jsonify<A>;
+declare const b: Jsonify<B>;
+
+declare const v: V; // Not assignable to JsonValue because it is defined as interface
+declare const u: U; // Assignable to JsonValue because the interface extends JsonObject
+
+declare const x: X; // Not assignable to JsonValue because it contains Date value
+declare const y: Y; // Not assignable to JsonValue because it contains Date value
+
+declare const z: Z; // Not assignable to JsonValue because undefined is not valid Json value
+declare const w: W; // Not assignable to JsonValue because a function is not valid Json value
+
+expectTypeOf<null>().toBeAssignableTo<JsonValue>();
+expectTypeOf<false>().toBeAssignableTo<JsonValue>();
+expectTypeOf<0>().toBeAssignableTo<JsonValue>();
+expectTypeOf<''>().toBeAssignableTo<JsonValue>();
+[] satisfies JsonValue;
+expectTypeOf([] as const).toBeAssignableTo<JsonValue>();
+({}) satisfies JsonValue;
+[0] satisfies JsonValue;
+({a: 0}) satisfies JsonValue;
+expectTypeOf(a).toBeAssignableTo<JsonValue>();
+expectTypeOf(b).toBeAssignableTo<JsonValue>();
+expectTypeOf(u).toBeAssignableTo<JsonValue>();
+({a: {b: true, c: {}}, d: [{}, 2, 'hi']}) satisfies JsonValue;
+[{}, {a: 'hi'}, null, 3] satisfies JsonValue;
+
+expectTypeOf(new Date()).not.toBeAssignableTo<JsonValue>();
+expectTypeOf([new Date()]).not.toBeAssignableTo<JsonValue>();
+expectTypeOf({a: new Date()}).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(v).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(x).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(y).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(z).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(w).not.toBeAssignableTo<JsonValue>();
+expectTypeOf<undefined>().not.toBeAssignableTo<JsonValue>();
+expectTypeOf(5 as number | undefined).not.toBeAssignableTo<JsonValue>();
+
+// An interface, because an interface is not assignable to `JsonValue` while its `Jsonify` version is.
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface Geometry {
+	type: 'Point' | 'Polygon';
+	coordinates: [number, number];
+}
+
+const point: Geometry = {
+	type: 'Point',
+	coordinates: [1, 1],
+};
+
+expectTypeOf(point).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(point).toBeAssignableTo<Jsonify<Geometry>>();
+
+// The following const values are examples of values `v` that are not JSON, but are *jsonable* using
+// `v.toJSON()` or `JSON.parse(JSON.stringify(v))`
+declare const dateToJSON: Jsonify<Date>;
+expectTypeOf(dateToJSON).toBeAssignableTo<string>();
+expectTypeOf(dateToJSON).toBeAssignableTo<JsonValue>();
+
+// The following commented `= JSON.parse(JSON.stringify(x))` is an example of how `parsedStringifiedX` could be created.
+// * Note that this would be an unsafe assignment because `JSON.parse()` returns type `any`.
+//   But by inspection `JSON.stringify(x)` will use `x.a.toJSON()`. So the `JSON.parse()` result can be
+//   assigned to `Jsonify<X>` if the `@typescript-eslint/no-unsafe-assignment` ESLint rule is ignored
+//   or an `as Jsonify<X>` is added.
+// * This test is not about how `parsedStringifiedX` is created, but about its type, so the `const` value is declared.
+declare const parsedStringifiedX: Jsonify<X>; // = JSON.parse(JSON.stringify(x));
+expectTypeOf(parsedStringifiedX).toBeAssignableTo<JsonValue>();
+expectTypeOf(parsedStringifiedX.a).toBeAssignableTo<string>();
+
+class NonJsonWithToJSON {
+	public fixture = new Map<string, number>([['a', 1], ['b', 2]]);
+
+	public toJSON(): {fixture: Array<[string, number]>} {
+		return {
+			fixture: [...this.fixture],
+		};
+	}
+}
+
+const nonJsonWithToJSON = new NonJsonWithToJSON();
+expectTypeOf(nonJsonWithToJSON).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(nonJsonWithToJSON.toJSON()).toBeAssignableTo<JsonValue>();
+expectTypeOf(nonJsonWithToJSON.toJSON()).toBeAssignableTo<Jsonify<NonJsonWithToJSON>>();
+
+class NonJsonExtendPrimitiveWithToJSON extends Number {
+	public fixture = 42n;
+
+	public toJSON(): {fixture: string} {
+		return {
+			fixture: '42n',
+		};
+	}
+}
+
+const nonJsonExtendPrimitiveWithToJSON = new NonJsonExtendPrimitiveWithToJSON();
+expectTypeOf(nonJsonExtendPrimitiveWithToJSON).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(nonJsonExtendPrimitiveWithToJSON.toJSON()).toBeAssignableTo<JsonValue>();
+expectTypeOf(nonJsonExtendPrimitiveWithToJSON.toJSON()).toBeAssignableTo<Jsonify<NonJsonExtendPrimitiveWithToJSON>>();
+
+class NonJsonWithToJSONWrapper {
+	public inner: NonJsonWithToJSON = nonJsonWithToJSON;
+	public override = 42;
+
+	public toJSON() {
+		const stringOverride = 'override';
+
+		return {
+			override: stringOverride,
+			inner: this.inner,
+			innerDeep: {inner: this.inner},
+		};
+	}
+}
+
+expectTypeOf(new NonJsonWithToJSONWrapper()).not.toBeAssignableTo<JsonValue>();
+
+type InnerFixture = {fixture: Array<[string, number]>};
+
+expectTypeOf<Jsonify<NonJsonWithToJSONWrapper>>().toBe<{
+	override: string;
+	inner: InnerFixture;
+	innerDeep: {inner: InnerFixture};
+}>();
+
+class NonJsonWithInvalidToJSON {
+	public fixture = new Map<string, number>([['a', 1], ['b', 2]]);
+
+	// This is intentionally invalid `.toJSON()`.
+	// It is invalid because the result is not assignable to `JsonValue`.
+	public toJSON(): {fixture: Map<string, number>} {
+		return {
+			fixture: this.fixture,
+		};
+	}
+}
+
+const nonJsonWithInvalidToJSON = new NonJsonWithInvalidToJSON();
+expectTypeOf(nonJsonWithInvalidToJSON).not.toBeAssignableTo<JsonValue>();
+expectTypeOf(nonJsonWithInvalidToJSON.toJSON()).not.toBeAssignableTo<JsonValue>();
+
+// Not jsonable types; these types behave differently when used as plain values, as members of arrays and as values of objects
+declare const undefined: undefined;
+expectTypeOf<undefined>().not.toBeAssignableTo<JsonValue>();
+
+declare const function_: (_: any) => void;
+expectTypeOf(function_).not.toBeAssignableTo<JsonValue>();
+
+declare const symbol: symbol;
+expectTypeOf(symbol).not.toBeAssignableTo<JsonValue>();
+
+// Plain values fail JSON.stringify()
+declare const plainUndefined: Jsonify<typeof undefined>;
+expectTypeOf(plainUndefined).toBe<never>();
+
+declare const plainFunction: Jsonify<typeof function_>;
+expectTypeOf(plainFunction).toBe<never>();
+
+declare const plainSymbol: Jsonify<typeof symbol>;
+expectTypeOf(plainSymbol).toBe<never>();
+
+declare const plainNever: Jsonify<never>;
+expectTypeOf(plainNever).toBe<never>();
+
+// Array members become null
+declare const arrayMemberUndefined: Jsonify<Array<typeof undefined>>;
+expectTypeOf(arrayMemberUndefined).toBe<null[]>();
+
+declare const arrayMemberUnionWithUndefined: Jsonify<Array<typeof undefined | typeof number>>;
+expectTypeOf(arrayMemberUnionWithUndefined).toBe<Array<null | number>>();
+
+declare const arrayMemberUnionWithUndefinedDeep: Jsonify<Array<Array<typeof undefined | typeof number>> | {foo: Array<typeof undefined | typeof number>}>;
+expectTypeOf(arrayMemberUnionWithUndefinedDeep).toBe<Array<Array<null | number>> | {foo: Array<null | number>}>();
+
+declare const arrayMemberFunction: Jsonify<Array<typeof function_>>;
+expectTypeOf(arrayMemberFunction).toBe<null[]>();
+
+declare const arrayMemberSymbol: Jsonify<Array<typeof symbol>>;
+expectTypeOf(arrayMemberSymbol).toBe<null[]>();
+
+// A non-JSON-able member of a union still becomes null instead of collapsing the union
+declare const arrayMemberUnionWithSymbol: Jsonify<Array<typeof symbol | typeof number>>;
+expectTypeOf(arrayMemberUnionWithSymbol).toBe<Array<null | number>>();
+
+declare const arrayMemberUnionWithFunction: Jsonify<Array<typeof function_ | typeof number>>;
+expectTypeOf(arrayMemberUnionWithFunction).toBe<Array<null | number>>();
+
+// The same holds for tuple members
+declare const tupleMemberUnionWithSymbol: Jsonify<[typeof string | typeof symbol, number]>;
+expectTypeOf(tupleMemberUnionWithSymbol).toBe<[string | null, number]>();
+
+// The member mapping is distributive, and distributing over the empty union gives `never` rather than `null`, so this changed from `null[]` to `never[]`. That is the better answer: an array of `never` can only be empty, and `JSON.stringify([])` is `'[]'`.
+declare const arrayMemberNever: Jsonify<never[]>;
+expectTypeOf(arrayMemberNever).toBe<never[]>();
+
+// A tuple position cannot be empty, so a `never` member still becomes `null`.
+declare const tupleMemberNever: Jsonify<[never]>;
+expectTypeOf(tupleMemberNever).toBe<[null]>();
+
+declare const tupleMemberNeverAfterString: Jsonify<[string, never]>;
+expectTypeOf(tupleMemberNeverAfterString).toBe<[string, null]>();
+
+// `JSON.stringify` throws for a `bigint`, so there is no runtime answer, but a member it cannot represent still follows the same rule as a symbol or a function.
+declare const arrayMemberBigint: Jsonify<Array<1n>>;
+expectTypeOf(arrayMemberBigint).toBe<null[]>();
+
+// When used in object values, these keys are filtered
+declare const objectValueUndefined: Jsonify<{keep: string; undefined: typeof undefined}>;
+expectTypeOf(objectValueUndefined).toBe<{keep: string}>();
+
+declare const objectValueFunction: Jsonify<{keep: string; fn: typeof function_}>;
+expectTypeOf(objectValueFunction).toBe<{keep: string}>();
+
+declare const objectValueSymbol: Jsonify<{keep: string; symbol: typeof symbol}>;
+expectTypeOf(objectValueSymbol).toBe<{keep: string}>();
+
+// Symbol keys are filtered
+declare const objectKeySymbol: Jsonify<{[key: typeof symbol]: number; keep: string}>;
+expectTypeOf(objectKeySymbol).toBe<{keep: string}>();
+
+// Symbol keys are filtered even when their value is `any` or `unknown`
+declare const uniqueSymbol: unique symbol;
+expectTypeOf<Jsonify<{[key: symbol]: any; keep: string}>>().toBe<{keep: string}>();
+expectTypeOf<Jsonify<{[key: symbol]: unknown; keep: string}>>().toBe<{keep: string}>();
+expectTypeOf<Jsonify<{[uniqueSymbol]: any; keep: string}>>().toBe<{keep: string}>();
+expectTypeOf<Jsonify<{[uniqueSymbol]?: unknown; keep: string}>>().toBe<{keep: string}>();
+expectTypeOf<Jsonify<Record<PropertyKey, any>>>().toBe<Record<string | number, any>>();
+expectTypeOf<Jsonify<Record<PropertyKey, unknown>>>().toBe<Record<string | number, JsonValue>>();
+expectTypeOf<Jsonify<Record<symbol, any>>>().toBe<{}>();
+expectTypeOf<Jsonify<{[key: symbol]: unknown}>>().toBe<{}>();
+expectTypeOf<Jsonify<{[uniqueSymbol]: any}>>().toBe<{}>();
+expectTypeOf<Jsonify<{[key: symbol]: any; [key: string]: number}>>().toBe<{[key: string]: number}>();
+expectTypeOf<Jsonify<{[uniqueSymbol]: unknown; keep: any}>>().toBe<{keep: any}>();
+expectTypeOf<Jsonify<{payload: {[uniqueSymbol]: any; keep: string}}>>().toBe<{payload: {keep: string}}>();
+expectTypeOf<Jsonify<Array<{[uniqueSymbol]: any; keep: string}>>>().toBe<Array<{keep: string}>>();
+
+// A property that can only be a symbol when it is present is filtered too.
+expectTypeOf<Jsonify<{a?: symbol; b: symbol | undefined; keep: string}>>().toBe<{keep: string}>();
+
+// An `any` or `unknown` property keeps its modifiers.
+expectTypeOf<Jsonify<{a?: any; b?: unknown}>>().toBe<{a?: any; b?: JsonValue}>();
+expectTypeOf<Jsonify<{readonly a: any; readonly b: unknown}>>().toBe<{readonly a: any; readonly b: JsonValue}>();
+
+// Number, String and Boolean values are turned into primitive counterparts
+declare const number: Number;
+expectTypeOf(number).not.toBeAssignableTo<JsonValue>();
+
+declare const string: String;
+expectTypeOf(string).not.toBeAssignableTo<JsonValue>();
+
+declare const boolean: Boolean;
+expectTypeOf(boolean).not.toBeAssignableTo<JsonValue>();
+
+declare const numberJson: Jsonify<typeof number>;
+expectTypeOf(numberJson).toBe<number>();
+
+declare const stringJson: Jsonify<typeof string>;
+expectTypeOf(stringJson).toBe<string>();
+
+declare const booleanJson: Jsonify<typeof boolean>;
+expectTypeOf(booleanJson).toBe<boolean>();
+
+declare const tupleJson: Jsonify<[string, Date]>;
+expectTypeOf(tupleJson).toBe<[string, string]>();
+
+declare const tupleRestJson: Jsonify<[string, ...Date[]]>;
+expectTypeOf(tupleRestJson).toBe<[string, ...string[]]>();
+
+declare const mixTupleJson: Jsonify<['1', (_: any) => void, 2]>;
+expectTypeOf(mixTupleJson).toBe<['1', null, 2]>();
+
+declare const tupleStringJson: Jsonify<string[] & ['some value']>;
+expectTypeOf(tupleStringJson).toBe<['some value']>();
+
+// A tagged primitive keeps its tag, because `JSON.parse` gives back the same value.
+type UserId = Tagged<number, 'UserId'>;
+expectTypeOf<Jsonify<UserId>>().toBe<UserId>();
+expectTypeOf<Jsonify<{id: UserId}>>().toBe<{id: UserId}>();
+expectTypeOf<Jsonify<{id?: UserId}>>().toBe<{id?: UserId}>();
+expectTypeOf<Jsonify<Tagged<'a' | 'b', 'Letter'>>>().toBe<Tagged<'a' | 'b', 'Letter'>>();
+expectTypeOf<Jsonify<UserId | undefined>>().toBe<UserId>();
+expectTypeOf<Jsonify<UserId[]>>().toBe<UserId[]>();
+
+// A tagged object, array, or `Date` becomes a new value and loses its tag.
+expectTypeOf<Jsonify<Tagged<{a: Date}, 'X'>>>().toBe<{a: string}>();
+expectTypeOf<Jsonify<Tagged<Date, 'X'>>>().toBe<string>();
+
+// `LiteralToPrimitiveDeep` removes all tags, and also widens literals.
+expectTypeOf<LiteralToPrimitiveDeep<Jsonify<{id: UserId; type: 'Point'}>>>().toBe<{id: number; type: string}>();
+
+// A tagged tuple keeps all its elements. `JSON.stringify` drops the tag's symbol key, so the result is the same as for the untagged tuple.
+expectTypeOf<Jsonify<Tagged<[number, number], 'Point'>>>().toBe<[number, number]>();
+expectTypeOf<Jsonify<Tagged<[Date, number], 'T'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Tagged<[1, 2, 3], 'T'>>>().toBe<[1, 2, 3]>();
+expectTypeOf<Jsonify<Tagged<readonly [string, Date], 'T'>>>().toBe<[string, string]>();
+expectTypeOf<Jsonify<Tagged<[string, Date?], 'T'>>>().toBe<[string] | [string, string | null]>();
+expectTypeOf<Jsonify<Tagged<[string, ...Date[]], 'T'>>>().toBe<[string, ...string[]]>();
+expectTypeOf<Jsonify<Tagged<[...Date[], number], 'T'>>>().toBe<Jsonify<[...Date[], number]>>();
+expectTypeOf<Jsonify<Tagged<['1', (_: any) => void, symbol], 'T'>>>().toBe<['1', null, null]>();
+expectTypeOf<Jsonify<Tagged<[], 'T'>>>().toBe<[]>();
+expectTypeOf<Jsonify<Tagged<Date[], 'T'>>>().toBe<string[]>();
+expectTypeOf<Jsonify<Tagged<TupleOf<200, Date>, 'T'>>>().toBe<TupleOf<200, string>>();
+
+// With more than one tag, with metadata, and with the deprecated `Opaque`
+expectTypeOf<Jsonify<Tagged<Tagged<[Date, number], 'A'>, 'B'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Tagged<[Date, number], 'A' | 'B'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Tagged<[Date, number], 'A', {unit: 'cm'}>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Opaque<[Date, number], 'O'>>>().toBe<[string, number]>();
+
+// A union of tagged tuples, and tagged tuples nested in other types
+expectTypeOf<Jsonify<Tagged<[Date] | [number, number], 'T'>>>().toBe<[string] | [number, number]>();
+expectTypeOf<Jsonify<{point: Tagged<[number, number], 'Point'>}>>().toBe<{point: [number, number]}>();
+expectTypeOf<Jsonify<Array<Tagged<[Date, number], 'T'>>>>().toBe<Array<[string, number]>>();
+expectTypeOf<Jsonify<[Tagged<[Date, number], 'T'>, string]>>().toBe<[[string, number], string]>();
+
+// A flavored tuple keeps all its elements too, also with more than one flavor, and when flavors and tags are combined.
+expectTypeOf<Jsonify<Flavor<[Date, number], 'T'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Flavor<readonly [string, Date], 'T'>>>().toBe<[string, string]>();
+expectTypeOf<Jsonify<Flavor<[string, Date?], 'T'>>>().toBe<[string] | [string, string | null]>();
+expectTypeOf<Jsonify<Flavor<[string, ...Date[]], 'T'>>>().toBe<[string, ...string[]]>();
+expectTypeOf<Jsonify<Flavor<[], 'T'>>>().toBe<[]>();
+expectTypeOf<Jsonify<Flavor<[any, unknown, Date], 'T'>>>().toBe<[any, JsonValue, string]>();
+expectTypeOf<Jsonify<Flavor<Date[], 'T'>>>().toBe<string[]>();
+expectTypeOf<Jsonify<Flavor<TupleOf<200, Date>, 'T'>>>().toBe<TupleOf<200, string>>();
+expectTypeOf<Jsonify<Flavor<Flavor<[Date, number], 'A'>, 'B'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Flavor<Flavor<[Date, number], 'A'>, 'B' | 'C'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Flavor<[Date, number], 'A' | 'B'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Tagged<Flavor<[Date, number], 'A'>, 'B'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Flavor<Tagged<[Date, number], 'A'>, 'B'>>>().toBe<[string, number]>();
+expectTypeOf<Jsonify<Flavor<[Date] | [number, number], 'T'>>>().toBe<[string] | [number, number]>();
+expectTypeOf<Jsonify<{point: Flavor<[number, number], 'Point'>}>>().toBe<{point: [number, number]}>();
+expectTypeOf<Jsonify<Array<Flavor<[Date, number], 'T'>>>>().toBe<Array<[string, number]>>();
+expectTypeOf<Jsonify<[Flavor<[Date, number], 'T'>, string]>>().toBe<[[string, number], string]>();
+expectTypeOf<Jsonify<Flavor<[Flavor<number, 'Id'>, Date], 'T'>>>().toBe<[Flavor<number, 'Id'>, string]>();
+
+// A tagged array that contains itself is kept as it is, like an untagged one.
+type TaggedTree = string | Tagged<TaggedTree[], 'Tree'>;
+expectTypeOf<Jsonify<TaggedTree>>().toBe<TaggedTree>();
+type TaggedDateTree = Date | Tagged<TaggedDateTree[], 'Tree'>;
+expectTypeOf<Jsonify<TaggedDateTree>>().toBe<string | JsonValue[]>();
+
+// A tagged primitive inside a tagged tuple keeps its tag, like any tagged primitive.
+expectTypeOf<Jsonify<Tagged<[Tagged<number, 'Id'>, Date], 'T'>>>().toBe<[Tagged<number, 'Id'>, string]>();
+
+// BigInt fails JSON.stringify
+declare const bigInt: Jsonify<bigint>;
+expectTypeOf(bigInt).toBe<never>();
+
+declare const int8Array: Int8Array;
+declare const int8ArrayJson: Jsonify<typeof int8Array>;
+expectTypeOf(int8ArrayJson).toBe<Record<string, number>>();
+
+declare const map: Map<string, number>;
+declare const mapJson: Jsonify<typeof map>;
+expectTypeOf(mapJson).toBe<EmptyObject>();
+({}) satisfies Jsonify<typeof map>;
+
+// Regression test for https://github.com/sindresorhus/type-fest/issues/466
+expectTypeOf<42>().not.toBeAssignableTo<Jsonify<typeof map>>();
+expectTypeOf<{foo: 42}>().not.toBeAssignableTo<Jsonify<typeof map>>();
+
+declare const set: Set<string>;
+declare const setJson: Jsonify<typeof set>;
+expectTypeOf(setJson).toBe<EmptyObject>();
+({}) satisfies Jsonify<typeof set>;
+
+// Regression test for https://github.com/sindresorhus/type-fest/issues/466
+expectTypeOf<42>().not.toBeAssignableTo<Jsonify<typeof set>>();
+expectTypeOf<{foo: 42}>().not.toBeAssignableTo<Jsonify<typeof set>>();
+
+// A `ReadonlyMap`/`ReadonlySet` is the same as a `Map`/`Set` at runtime and also stringifies to `{}`.
+declare const readonlyMap: ReadonlyMap<string, number>;
+declare const readonlyMapJson: Jsonify<typeof readonlyMap>;
+expectTypeOf(readonlyMapJson).toBe<EmptyObject>();
+({}) satisfies Jsonify<typeof readonlyMap>;
+expectTypeOf<{size: 1}>().not.toBeAssignableTo<Jsonify<typeof readonlyMap>>();
+
+declare const readonlySet: ReadonlySet<string>;
+declare const readonlySetJson: Jsonify<typeof readonlySet>;
+expectTypeOf(readonlySetJson).toBe<EmptyObject>();
+({}) satisfies Jsonify<typeof readonlySet>;
+expectTypeOf<{size: 1}>().not.toBeAssignableTo<Jsonify<typeof readonlySet>>();
+
+// Positive and negative Infinity types are turned into null
+// NOTE: NaN is not detectable in TypeScript; see https://github.com/sindresorhus/type-fest/issues/406
+declare const positiveInfinity: PositiveInfinity;
+declare const positiveInfJson: Jsonify<typeof positiveInfinity>;
+expectTypeOf(positiveInfJson).toBe<null>();
+declare const negativeInf: NegativeInfinity;
+declare const negativeInfJson: Jsonify<typeof negativeInf>;
+expectTypeOf(negativeInfJson).toBe<null>();
+expectTypeOf<Jsonify<1 | PositiveInfinity>>().toBe<1 | null>();
+expectTypeOf<Jsonify<{value: PositiveInfinity}>>().toBe<{value: null}>();
+expectTypeOf<Jsonify<[NegativeInfinity, 1]>>().toBe<[null, 1]>();
+
+// Known limitation: `NaN`, `Infinity`, and `-Infinity` values are typed as `number`, so they stay `number`, even though `JSON.stringify` writes them as `null`.
+expectTypeOf<Jsonify<number>>().toBe<number>();
+expectTypeOf<Jsonify<typeof Number.NaN>>().toBe<number>();
+expectTypeOf<Jsonify<{value: number}>>().toBe<{value: number}>();
+expectTypeOf<Jsonify<number[]>>().toBe<number[]>();
+
+// Test that optional type members are not discarded wholesale.
+type OptionalPrimitive = {
+	a?: string;
+};
+
+type OptionalTypeUnion = {
+	a?: string | (() => any);
+};
+
+type NonOptionalTypeUnion = {
+	a: string | undefined;
+};
+
+declare const jsonifiedOptionalPrimitive: Jsonify<OptionalPrimitive>;
+declare const jsonifiedOptionalTypeUnion: Jsonify<OptionalTypeUnion>;
+declare const jsonifiedNonOptionalTypeUnion: Jsonify<NonOptionalTypeUnion>;
+
+expectTypeOf(jsonifiedOptionalPrimitive).toBe<{a?: string}>();
+expectTypeOf(jsonifiedOptionalTypeUnion).toBe<{a?: string}>();
+expectTypeOf(jsonifiedNonOptionalTypeUnion).toBe<{a?: string}>();
+
+// Test that optional properties don't leak `undefined` into the key set and that re-applying `Jsonify` is a no-op.
+type OptionalMixed = {
+	required: string;
+	optional?: string;
+};
+
+declare const keyOfJsonifiedOptionalMixed: keyof Jsonify<OptionalMixed>;
+expectTypeOf(keyOfJsonifiedOptionalMixed).toBe<'required' | 'optional'>();
+
+declare const doubleJsonifiedOptionalMixed: Jsonify<Jsonify<OptionalMixed>>;
+expectTypeOf(doubleJsonifiedOptionalMixed).toBe<OptionalMixed>();
+
+declare const keyOfJsonifiedOptionalUnknown: keyof Jsonify<{a?: unknown}>;
+expectTypeOf(keyOfJsonifiedOptionalUnknown).toBe<'a'>();
+
+declare const keyOfJsonifiedOptionalAny: keyof Jsonify<{a?: any}>;
+expectTypeOf(keyOfJsonifiedOptionalAny).toBe<'a'>();
+
+// An `a?: never` property can only hold `undefined`, so the key is dropped like `{a: undefined}`.
+declare const keyOfJsonifiedOptionalNever: keyof Jsonify<{a?: never}>;
+expectTypeOf(keyOfJsonifiedOptionalNever).toBe<never>();
+
+// Test for 'Jsonify support for optional object keys, unserializable object values' #424
+// See https://github.com/sindresorhus/type-fest/issues/424
+type AppData = {
+	// Should be kept
+	requiredString: string;
+	requiredUnion: number | boolean;
+
+	// Should be kept and set to optional
+	optionalString?: string;
+	optionalUnion?: number | string;
+	optionalStringUndefined: string | undefined;
+	optionalUnionUndefined: number | string | undefined;
+
+	requiredFunctionUnion: string | (() => any);
+	optionalFunctionUnion?: string | (() => any);
+	optionalFunctionUnionUndefined: string | (() => any) | undefined;
+
+	// Should be omitted
+	requiredFunction: () => any;
+	optionalFunction?: () => any;
+	optionalFunctionUndefined: (() => any) | undefined;
+};
+
+type ExpectedAppDataJson = {
+	requiredString: string;
+	requiredUnion: number | boolean;
+
+	optionalString?: string;
+	optionalUnion?: string | number;
+	optionalStringUndefined?: string;
+	optionalUnionUndefined?: string | number;
+	requiredFunctionUnion?: string;
+	optionalFunctionUnion?: string;
+	optionalFunctionUnionUndefined?: string;
+};
+
+declare const response: Jsonify<AppData>;
+
+expectTypeOf(response).toBe<ExpectedAppDataJson>();
+
+expectTypeOf<Jsonify<any>>().toBe<any>();
+
+declare const objectWithAnyProperty: Jsonify<{
+	a: any;
+}>;
+expectTypeOf(objectWithAnyProperty).toBe<{a: any}>();
+
+declare const objectWithAnyProperties: Jsonify<Record<string, any>>;
+expectTypeOf(objectWithAnyProperties).toBe<Record<string, any>>();
+
+// A property must not be dropped just because a function is assignable to its type.
+// See https://github.com/sindresorhus/type-fest/issues/667
+expectTypeOf<Jsonify<{payload: Record<string, any>}>>().toBe<{payload: Record<string, any>}>();
+expectTypeOf<Jsonify<{payload: {[key: string]: any}}>>().toBe<{payload: {[key: string]: any}}>();
+expectTypeOf<Jsonify<{payload: Record<PropertyKey, any>}>>().toBe<{payload: Record<string | number, any>}>();
+expectTypeOf<Jsonify<object>>().toBe<{}>();
+expectTypeOf<Jsonify<object>>().toBeAssignableTo<JsonValue>();
+expectTypeOf<Jsonify<{}>>().toBe<{}>();
+expectTypeOf<Jsonify<object | string>>().toBe<string | {}>();
+expectTypeOf<Jsonify<object & {date: Date}>>().toBe<{date: string}>();
+expectTypeOf<Jsonify<object[]>>().toBe<Array<{}>>();
+expectTypeOf<Jsonify<[object]>>().toBe<[{}]>();
+expectTypeOf<Jsonify<{payload?: object}>>().toBe<{payload?: {}}>();
+expectTypeOf<Jsonify<{payload: object | undefined}>>().toBe<{payload?: {}}>();
+expectTypeOf<Jsonify<{readonly payload: object}>>().toBe<{readonly payload: {}}>();
+expectTypeOf<Jsonify<Record<string, object>>>().toBe<Record<string, {}>>();
+expectTypeOf<Jsonify<{payload: object}>>().toBe<{payload: {}}>();
+expectTypeOf<Jsonify<{payload: {}}>>().toBe<{payload: {}}>();
+expectTypeOf<Jsonify<{payload: Record<string, string>}>>().toBe<{payload: Record<string, string>}>();
+expectTypeOf<Jsonify<{payload: Record<string, Date>}>>().toBe<{payload: Record<string, string>}>();
+expectTypeOf<Jsonify<{payload: Record<string, unknown>}>>().toBe<{payload: Record<string, JsonValue>}>();
+expectTypeOf<Jsonify<{payload?: Record<string, any>}>>().toBe<{payload?: Record<string, any>}>();
+expectTypeOf<Jsonify<{payload: Record<string, any> | undefined}>>().toBe<{payload?: Record<string, any>}>();
+expectTypeOf<Jsonify<{payload: Record<string, any>; date: Date}>>().toBe<{payload: Record<string, any>; date: string}>();
+expectTypeOf<Jsonify<{outer: {inner: Record<string, any>}}>>().toBe<{outer: {inner: Record<string, any>}}>();
+expectTypeOf<Jsonify<{payload: Array<Record<string, any>>}>>().toBe<{payload: Array<Record<string, any>>}>();
+expectTypeOf<Jsonify<[Record<string, any>]>>().toBe<[Record<string, any>]>();
+
+// A literal key next to an index signature keeps its own type.
+expectTypeOf<Jsonify<{[key: string]: string; foo: 'a'}>>().toBe<{[key: string]: string; foo: 'a'}>();
+expectTypeOf<Jsonify<{[key: string]: string; foo: 'a'; bar?: 'b'}>>().toBe<{[key: string]: string; foo: 'a'; bar?: 'b'}>();
+expectTypeOf<Jsonify<{[key: string]: string | Date; foo: Date}>>().toBe<{[key: string]: string; foo: string}>();
+expectTypeOf<Jsonify<{[key: string]: string | undefined; foo: 'a' | undefined}>>().toBe<{[key: string]: string; foo?: 'a'}>();
+expectTypeOf<Jsonify<{[key: number]: string; 0: 'a'}>>().toBe<{[key: number]: string; 0: 'a'}>();
+expectTypeOf<Jsonify<{[key: `x${string}`]: number; foo: 'a'}>>().toBe<{[key: `x${string}`]: number; foo: 'a'}>();
+expectTypeOf<Jsonify<{[key: string]: any; foo: () => void}>>().toBe<{[key: string]: any}>();
+expectTypeOf<Jsonify<{[key: string]: any; foo: never}>>().toBe<{[key: string]: any}>();
+expectTypeOf<Jsonify<{payload: {[key: string]: string; foo: 'a'}}>>().toBe<{payload: {[key: string]: string; foo: 'a'}}>();
+expectTypeOf<Jsonify<{[key: string]: string; readonly foo: 'a'}>>().toBe<{[key: string]: string; readonly foo: 'a'}>();
+expectTypeOf<Jsonify<{readonly [key: string]: string; foo: 'a'}>>().toBe<{readonly [key: string]: string; foo: 'a'}>();
+expectTypeOf<Jsonify<{[key: string]: number; foo?: 1}>>().toBe<{[key: string]: number; foo?: 1}>();
+expectTypeOf<Jsonify<{[key: string]: number | undefined; foo?: 1}>>().toBe<{[key: string]: number; foo?: 1}>();
+expectTypeOf<Jsonify<{[key: string]: unknown; foo: 1}>>().toBe<{[key: string]: JsonValue; foo: 1}>();
+expectTypeOf<Jsonify<{[key: string]: any; foo: unknown}>>().toBe<{[key: string]: any; foo: JsonValue}>();
+expectTypeOf<Jsonify<{[key: string]: string; [key: number]: '1'; foo: 'a'; 0: '1'}>>().toBe<{[key: string]: string; [key: number]: '1'; foo: 'a'; 0: '1'}>();
+expectTypeOf<Jsonify<{[key: string]: string; [uniqueSymbol]: 'x'; foo: 'a'}>>().toBe<{[key: string]: string; foo: 'a'}>();
+expectTypeOf<Jsonify<{[key: `data-${string}`]: string; id: number}>>().toBe<{[key: `data-${string}`]: string; id: number}>();
+expectTypeOf<Jsonify<{[key: string]: {date: Date}; foo: {date: Date; extra?: string | undefined}}>>().toBe<{[key: string]: {date: string}; foo: {date: string; extra?: string}}>();
+
+// The same holds for an index signature that comes from an intersection.
+expectTypeOf<Jsonify<Record<string, string> & {foo: 'a'}>>().toBe<{[key: string]: string; foo: 'a'}>();
+expectTypeOf<Jsonify<Record<'a' | 'b', number> & Record<string, number | string>>>().toBe<{[key: string]: number | string; a: number; b: number}>();
+expectTypeOf<Jsonify<Record<string, string | Date> & {foo: Date}>>().toBe<{[key: string]: string; foo: string}>();
+expectTypeOf<Jsonify<Record<string, string> & {foo: symbol; bar: undefined; baz: () => void}>>().toBe<{[key: string]: string}>();
+expectTypeOf<Jsonify<Record<string, () => void> & {foo: 'a'}>>().toBe<{foo: 'a'}>();
+
+// The same holds for an interface, and the result is JSON.
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface ResponseHeaders {
+	[key: string]: string | Date;
+	'content-type': 'application/json';
+	date: Date;
+	etag?: string;
+}
+expectTypeOf<Jsonify<ResponseHeaders>>().toBe<{[key: string]: string; 'content-type': 'application/json'; date: string; etag?: string}>();
+expectTypeOf<Jsonify<ResponseHeaders>>().toBeAssignableTo<JsonValue>();
+expectTypeOf<Jsonify<{[key: string]: string; foo: 'a'}>>().toBeAssignableTo<JsonValue>();
+expectTypeOf<Jsonify<{[key: string]: number; foo?: 1}>>().toBeAssignableTo<JsonValue>();
+
+// It is also kept when nested, and applying `Jsonify` again does not change it.
+expectTypeOf<Jsonify<Array<{[key: string]: string; foo: 'a'}>>>().toBe<Array<{[key: string]: string; foo: 'a'}>>();
+expectTypeOf<Jsonify<[{[key: string]: number; foo: 1}]>>().toBe<[{[key: string]: number; foo: 1}]>();
+expectTypeOf<Jsonify<{outer: Record<string, Date> & {foo: Date}}>>().toBe<{outer: {[key: string]: string; foo: string}}>();
+expectTypeOf<Jsonify<Jsonify<ResponseHeaders>>>().toBe<Jsonify<ResponseHeaders>>();
+
+// Test for `Jsonify` support for nested objects with _only_ a name property.
+// See https://github.com/sindresorhus/type-fest/issues/657
+declare const nestedObjectWithNameProperty: {
+	first: {
+		name: string;
+	};
+};
+declare const jsonifiedNestedObjectWithNameProperty: Jsonify<
+	typeof nestedObjectWithNameProperty
+>;
+
+expectTypeOf(
+	jsonifiedNestedObjectWithNameProperty,
+).toBe<typeof nestedObjectWithNameProperty>();
+
+// Regression test for https://github.com/sindresorhus/type-fest/issues/629
+declare const readonlyTuple: Jsonify<readonly [1, 2, 3]>;
+expectTypeOf(readonlyTuple).toBe<[1, 2, 3]>();
+
+// `unknown` values
+declare const unknownValue: Jsonify<unknown>;
+declare const unknownArray: Jsonify<unknown[]>;
+declare const unknownTuple: Jsonify<[unknown, unknown]>;
+declare const objectWithUnknownValue: Jsonify<{key: unknown}>;
+expectTypeOf(unknownValue).toBe<JsonValue>();
+expectTypeOf<'foo'>().toBeAssignableTo<Jsonify<unknown>>();
+['foo'] satisfies Jsonify<unknown>;
+expectTypeOf(new Date()).not.toBeAssignableTo<Jsonify<unknown>>();
+expectTypeOf(unknownArray).toBe<JsonValue[]>();
+['foo'] satisfies Jsonify<unknown[]>;
+expectTypeOf([new Date()]).not.toBeAssignableTo<Jsonify<unknown[]>>();
+expectTypeOf(unknownTuple).toBe<[JsonValue, JsonValue]>();
+['foo', 'foo'] satisfies Jsonify<[unknown, unknown]>;
+expectTypeOf([new Date(), new Date()]).not.toBeAssignableTo<Jsonify<[unknown, unknown]>>();
+expectTypeOf(objectWithUnknownValue).toBe<{key: JsonValue}>();
+({key: []}) satisfies Jsonify<{key: unknown}>;
+expectTypeOf({key: new Date()}).not.toBeAssignableTo<Jsonify<{key: unknown}>>();
+
+expectTypeOf<{a: string}>().toBeAssignableTo<JsonObject>();
+expectTypeOf<{a: string | undefined}>().not.toBeAssignableTo<JsonObject>();
+expectTypeOf<{a?: string}>().toBeAssignableTo<JsonObject>();
+expectTypeOf<{a?: string | undefined}>().not.toBeAssignableTo<JsonObject>(); // Requires `exactOptionalPropertyTypes` to be enabled
+
+// Known limitation: TypeScript does not check symbol keys against a string index signature. `JSON.stringify` ignores symbol keys, so this is safe. Adding `[key: symbol]: never` to `JsonObject` would block them, but an interface with only a string index signature would then no longer be assignable.
+expectTypeOf<{[key: symbol]: number; a: string}>().toBeAssignableTo<JsonObject>();
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface StringIndexInterface {
+	[key: string]: JsonValue;
+}
+expectTypeOf<StringIndexInterface>().toBeAssignableTo<JsonObject>();
+
+// `JSON.stringify` always passes the property key to `toJSON`, so `toJSON` may declare parameters.
+declare const toJSONWithKey: Jsonify<{toJSON(key: string): string}>;
+expectTypeOf(toJSONWithKey).toBe<string>();
+
+declare const nestedToJSONWithKey: Jsonify<{nested: {toJSON(key: string): number}}>;
+expectTypeOf(nestedToJSONWithKey).toBe<{nested: number}>();
+
+declare const toJSONWithoutKey: Jsonify<{toJSON(): string}>;
+expectTypeOf(toJSONWithoutKey).toBe<string>();
+
+// `Map`, `Set`, and `RegExp` all stringify to `{}`, because their properties are not enumerable.
+declare const regexpValue: Jsonify<RegExp>;
+expectTypeOf(regexpValue).toBe<EmptyObject>();
+
+declare const nestedEmptyValues: Jsonify<{a: RegExp; b: SharedArrayBuffer}>;
+expectTypeOf(nestedEmptyValues).toBe<{a: EmptyObject; b: EmptyObject}>();
+
+// A plain object with `name` and `message` is structurally an `Error`, but it is data, so it is still walked.
+expectTypeOf<Jsonify<{name: string; message: string; code: number}>>().toBe<{name: string; message: string; code: number}>();
+
+// The `Function` interface is a function, so it is not written.
+expectTypeOf<Jsonify<Function>>().toBe<never>();
+expectTypeOf<Jsonify<Function[]>>().toBe<null[]>();
+
+declare const mapValue: Jsonify<Map<string, number>>;
+expectTypeOf(mapValue).toBe<EmptyObject>();
+
+// `ArrayBuffer` and `DataView` also stringify to `{}`, like the other non-enumerable built-ins.
+declare const arrayBufferValue: Jsonify<ArrayBuffer>;
+expectTypeOf(arrayBufferValue).toBe<EmptyObject>();
+
+declare const dataViewValue: Jsonify<DataView>;
+expectTypeOf(dataViewValue).toBe<EmptyObject>();
+
+declare const nestedArrayBuffer: Jsonify<{a: ArrayBuffer}>;
+expectTypeOf(nestedArrayBuffer).toBe<{a: EmptyObject}>();
+
+// A class is a function at runtime, so `JSON.stringify` drops a value holding one the same way it drops a value holding a plain function. A construct signature is not assignable to a call signature, so a class was not in the list of values that are not JSON-able.
+type Class_ = new () => {a: number};
+type AbstractClass = abstract new () => {a: number};
+
+declare const plainClass: Jsonify<Class_>;
+expectTypeOf(plainClass).toBe<never>();
+
+declare const plainAbstractClass: Jsonify<AbstractClass>;
+expectTypeOf(plainAbstractClass).toBe<never>();
+
+declare const arrayMemberClass: Jsonify<Class_[]>;
+expectTypeOf(arrayMemberClass).toBe<null[]>();
+
+declare const objectValueClass: Jsonify<{keep: string; class: Class_}>;
+expectTypeOf(objectValueClass).toBe<{keep: string}>();
+
+// An enum is a subtype of `string` or `number`, so it passes through where a primitive would, and TypeScript cannot tell an enum from a union of the same literals. A plain string is not assignable to the result, even though that is what `JSON.parse` gives back. `LiteralToPrimitiveDeep` unwraps it.
+enum Status {
+	Open = 'open',
+	Closed = 'closed',
+}
+
+declare const enumMember: Jsonify<{status: Status}>;
+expectTypeOf(enumMember).toBe<{status: Status}>();
+
+declare const enumMemberUnwrapped: LiteralToPrimitiveDeep<{status: Status}>;
+expectTypeOf(enumMemberUnwrapped).toBe<{status: string}>();
+
+// Optional tuple positions still have fixed indices and a finite maximum length after serialization.
+expectTypeOf<Jsonify<[1, Date?]>>().toBe<[1] | [1, string | null]>();
+expectTypeOf<Jsonify<readonly [1, Date?, boolean?]>>().toBe<[1] | [1, string | null] | [1, string | null, boolean | null]>();
+
+expectTypeOf<Jsonify<[Date?]>>().toBe<[] | [string | null]>();
+expectTypeOf<Jsonify<readonly [Date?, boolean?, number?]>>().toBe<[] | [string | null] | [string | null, boolean | null] | [string | null, boolean | null, number | null]>();
+expectTypeOf<Jsonify<[1, (Date | undefined)?]>>().toBe<[1] | [1, string | null]>();
+expectTypeOf<Jsonify<[symbol?, (() => void)?]>>().toBe<[] | [null] | [null, null]>();
+expectTypeOf<Jsonify<[unknown?]>>().toBe<[] | [JsonValue]>();
+expectTypeOf<Jsonify<[Date?, ...boolean[]]>>().toBe<[] | [string | null, ...boolean[]]>();
+expectTypeOf<Jsonify<[Date?, boolean?, ...symbol[]]>>().toBe<[] | [string | null] | [string | null, boolean | null, ...null[]]>();
+expectTypeOf<Jsonify<[1, Date?] | [2, boolean?]>>().toBe<[1] | [1, string | null] | [2] | [2, boolean | null]>();
+expectTypeOf<Jsonify<{values: readonly [Date?]}>>().toBe<{values: [] | [string | null]}>();
+expectTypeOf<Jsonify<[Date?, boolean?]>>().toBeAssignableTo<JsonValue>();
+expectTypeOf<[string, boolean, number]>().not.toBeAssignableTo<Jsonify<[Date?, boolean?]>>();
+
+// A missing optional position before a present one is a hole that serializes to null.
+// eslint-disable-next-line no-sparse-arrays
+const sparseOptionalTuple: [1, Date?, boolean?] = [1, , true];
+expectTypeOf<[1, null, true]>().toBeAssignableTo<Jsonify<typeof sparseOptionalTuple>>();
+
+// A property's toJSON result can cause that property to be omitted.
+expectTypeOf<Jsonify<{keep: 1; value: {toJSON(): undefined}}>>().toBe<{keep: 1}>();
+expectTypeOf<Jsonify<{keep: 1; value: {toJSON(): string | undefined}}>>().toBe<{keep: 1; value?: string}>();
+expectTypeOf<Jsonify<{readonly value: {toJSON(key: string): string | undefined}}>>().toBe<{readonly value?: string}>();
+expectTypeOf<Jsonify<{value?: {toJSON(): string | undefined}}>>().toBe<{value?: string}>();
+expectTypeOf<Jsonify<{value: {toJSON(): null | undefined}}>>().toBe<{value?: null}>();
+expectTypeOf<Jsonify<{value: {toJSON(): {id: string} | undefined}}>>().toBe<{value?: {id: string}}>();
+expectTypeOf<Jsonify<{outer: {keep: 1; value: {toJSON(): undefined}}}>>().toBe<{outer: {keep: 1}}>();
+
+// Ordinary toJSON results stay required, and unrelated fields retain their modifiers.
+expectTypeOf<Jsonify<{readonly keep: 1; optional?: boolean; value: {toJSON(): string}}>>().toBe<{readonly keep: 1; optional?: boolean; value: string}>();
+expectTypeOf<Jsonify<{value: Date}>>().toBe<{value: string}>();
+expectTypeOf<Jsonify<{value: {toJSON(): null}}>>().toBe<{value: null}>();
+expectTypeOf<Jsonify<{value: string | {toJSON(): undefined}}>>().toBe<{value?: string}>();
+expectTypeOf<Jsonify<{value?: {toJSON(): undefined}}>>().toBe<{}>();
+expectTypeOf<Jsonify<{value: {toJSON(): symbol}}>>().toBe<{}>();
+expectTypeOf<Jsonify<{value: {toJSON(): () => void}}>>().toBe<{}>();
+expectTypeOf<Jsonify<{toJSON(): undefined}>>().toBe<never>();
+expectTypeOf<Jsonify<Array<{toJSON(): undefined}>>>().toBe<null[]>();
+expectTypeOf<Jsonify<{value: {toJSON(): string | undefined}}>>().toBeAssignableTo<JsonValue>();
+
+// Optional and nullable name-only records are data, rather than functions.
+expectTypeOf<Jsonify<{value?: {name: string}}>>().toBe<{value?: {name: string}}>();
+expectTypeOf<Jsonify<{value: {name: string} | null}>>().toBe<{value: {name: string} | null}>();
+expectTypeOf<Jsonify<{value: [] | {name: string}}>>().toBe<{value: [] | {name: string}}>();
+expectTypeOf<Jsonify<{value: {toJSON(): {name: string} | undefined}}>>().toBe<{value?: {name: string}}>();
+
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface NamedRecord {
+	name: string;
+}
+expectTypeOf<{value: NamedRecord}>().not.toBeAssignableTo<JsonValue>(); // A nested interface also needs `Jsonify`
+expectTypeOf<Jsonify<{value: NamedRecord}>>().toBe<{value: {name: string}}>();
+expectTypeOf<Jsonify<{value?: NamedRecord}>>().toBe<{value?: {name: string}}>();
+
+class NamedClass {
+	name = 'record';
+}
+expectTypeOf<Jsonify<{value: NamedClass}>>().toBe<{value: {name: string}}>();
+expectTypeOf<Jsonify<{value?: NamedClass | null}>>().toBe<{value?: {name: string} | null}>();
+expectTypeOf<Jsonify<{readonly value?: NamedRecord}>>().toBe<{readonly value?: {name: string}}>();
+expectTypeOf<Jsonify<{value: NamedRecord | null | undefined}>>().toBe<{value?: {name: string} | null}>();
+expectTypeOf<Jsonify<{value: {toJSON(): NamedRecord | undefined}}>>().toBe<{value?: {name: string}}>();
+expectTypeOf<Jsonify<{value?: string | (() => void)}>>().toBe<{value?: string}>();
+expectTypeOf<Jsonify<{value?: NamedRecord}>>().toBeAssignableTo<JsonValue>();
+
+// An array's toJSON result is classified before non-JSON values become null.
+expectTypeOf<Jsonify<Array<{toJSON(): string | undefined}>>>().toBe<Array<string | null>>();
+expectTypeOf<Jsonify<readonly [1, {toJSON(): string | undefined}]>>().toBe<[1, string | null]>();
+expectTypeOf<Jsonify<Array<{toJSON(key: string): number | undefined}>>>().toBe<Array<number | null>>();
+expectTypeOf<Jsonify<Array<{toJSON(): string | symbol}>>>().toBe<Array<string | null>>();
+expectTypeOf<Jsonify<Array<{toJSON(): string | (() => void)}>>>().toBe<Array<string | null>>();
+expectTypeOf<Jsonify<{values: Array<{toJSON(): string | undefined}>}>>().toBe<{values: Array<string | null>}>();
+
+// Always-present results stay unchanged, and always-absent results become null.
+expectTypeOf<Jsonify<Array<{toJSON(): string}>>>().toBe<string[]>();
+expectTypeOf<Jsonify<Array<{toJSON(): undefined}>>>().toBe<null[]>();
+expectTypeOf<Jsonify<[{toJSON(): undefined}, {toJSON(): string}]>>().toBe<[null, string]>();
+expectTypeOf<Jsonify<Array<{toJSON(): null | undefined}>>>().toBe<null[]>();
+expectTypeOf<Jsonify<Array<{toJSON(): {name: string} | undefined}>>>().toBe<Array<null | {name: string}>>();
+expectTypeOf<Jsonify<Array<{toJSON(): NamedRecord | undefined}>>>().toBe<Array<null | {name: string}>>();
+expectTypeOf<Jsonify<[1, {toJSON(): string | undefined}?]>>().toBe<[1] | [1, string | null]>();
+expectTypeOf<Jsonify<Array<Date | {toJSON(): undefined}>>>().toBe<Array<string | null>>();
+expectTypeOf<Jsonify<Array<Array<{toJSON(): string | undefined}>>>>().toBe<Array<Array<string | null>>>();
+expectTypeOf<Jsonify<Array<{toJSON(): string | undefined}>>>().toBeAssignableTo<JsonValue>();
+
+// `JSON.stringify` calls `toJSON` only once per value, so the `toJSON` method of a `toJSON` result is not called.
+expectTypeOf<Jsonify<{toJSON(): Date}>>().toBe<{}>();
+expectTypeOf<Jsonify<{toJSON(): {toJSON(): string}}>>().toBe<{}>();
+expectTypeOf<Jsonify<{value: {toJSON(): Date}}>>().toBe<{value: {}}>();
+expectTypeOf<Jsonify<Array<{toJSON(): Date}>>>().toBe<Array<{}>>();
+expectTypeOf<Jsonify<[{toJSON(): Date}, Date]>>().toBe<[{}, string]>();
+expectTypeOf<Jsonify<{toJSON(): Map<string, number>}>>().toBe<EmptyObject>();
+
+// The properties and items of a `toJSON` result are still converted, and a primitive wrapper is still unwrapped.
+expectTypeOf<Jsonify<{toJSON(): {date: Date}}>>().toBe<{date: string}>();
+expectTypeOf<Jsonify<{toJSON(): Date[]}>>().toBe<string[]>();
+expectTypeOf<Jsonify<{toJSON(): Number}>>().toBe<number>();
+expectTypeOf<Jsonify<{toJSON(): readonly [1, Date]}>>().toBe<[1, string]>();
+expectTypeOf<Jsonify<{toJSON(): unknown}>>().toBe<JsonValue>();
+expectTypeOf<Jsonify<{toJSON(): any}>>().toBe<any>();
+
+// A `toJSON` result that can be the same type does not recurse forever.
+type ReturnsItself = {value: number; toJSON(): ReturnsItself};
+expectTypeOf<Jsonify<ReturnsItself>>().toBe<{value: number}>();
+type ToJsonChain = string | {toJSON(): ToJsonChain};
+expectTypeOf<Jsonify<ToJsonChain>>().toBe<string | {}>();
+expectTypeOf<Jsonify<{value: ToJsonChain}>>().toBe<{value: string | {}}>();
+expectTypeOf<Jsonify<Jsonifiable>>().toBeAssignableTo<JsonValue>();
+
+// The JSON types are already JSON, so they stay unchanged. Their arrays contain `JsonValue` itself, which used to recurse forever.
+expectTypeOf<Jsonify<JsonValue>>().toBe<JsonValue>();
+expectTypeOf<Jsonify<JsonObject>>().toBe<JsonObject>();
+expectTypeOf<Jsonify<JsonArray>>().toBe<JsonArray>();
+expectTypeOf<Jsonify<{value: JsonValue; date: Date}>>().toBe<{value: JsonValue; date: string}>();
+expectTypeOf<Jsonify<Array<JsonValue | Date>>>().toBe<Array<JsonValue | string>>();
+
+// An array that contains itself stays unchanged when it is already JSON, as it would otherwise recurse forever.
+type SelfJson = string | number | boolean | null | SelfJson[] | {[key: string]: SelfJson};
+expectTypeOf<Jsonify<SelfJson>>().toBe<SelfJson>();
+expectTypeOf<Jsonify<SelfJson[]>>().toBe<SelfJson[]>();
+expectTypeOf<Jsonify<SelfJson[][]>>().toBe<SelfJson[][]>();
+expectTypeOf<Jsonify<{data: SelfJson; date: Date}>>().toBe<{data: SelfJson; date: string}>();
+expectTypeOf<Jsonify<[SelfJson, Date]>>().toBe<[SelfJson, string]>();
+expectTypeOf<Jsonify<SelfJson | undefined>>().toBe<SelfJson>();
+
+type ReadonlySelfJson = string | readonly ReadonlySelfJson[];
+expectTypeOf<Jsonify<ReadonlySelfJson>>().toBe<ReadonlySelfJson>();
+
+// An interface that extends `Array`, like Prisma's `JsonArray`.
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface InterfaceJsonArray extends Array<InterfaceJsonValue> {}
+type InterfaceJsonValue = string | InterfaceJsonArray;
+expectTypeOf<Jsonify<InterfaceJsonValue>>().toBe<InterfaceJsonValue>();
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface NestedArray extends Array<NestedArray> {}
+expectTypeOf<Jsonify<NestedArray>>().toBe<NestedArray>();
+
+// An array that contains itself and is not already JSON becomes `JsonValue[]`. The other members are still transformed.
+type DateTree = Date | DateTree[];
+expectTypeOf<Jsonify<DateTree>>().toBe<string | JsonValue[]>();
+type ReadonlyDateTree = Date | readonly ReadonlyDateTree[];
+expectTypeOf<Jsonify<ReadonlyDateTree>>().toBe<string | JsonValue[]>();
+type OptionalTree = number | undefined | OptionalTree[];
+expectTypeOf<Jsonify<OptionalTree>>().toBe<number | JsonValue[]>();
+type MixedTree = string | MixedTree[] | {date: Date};
+expectTypeOf<Jsonify<MixedTree>>().toBe<string | JsonValue[] | {date: string}>();
+
+// Like the type that Supabase generates. The `undefined` makes it not JSON.
+type SupabaseJson = string | number | boolean | null | SupabaseJson[] | {[key: string]: SupabaseJson | undefined};
+expectTypeOf<Jsonify<SupabaseJson>>().toBeAssignableTo<JsonValue>();
+expectTypeOf<Extract<Jsonify<SupabaseJson>, unknown[]>>().toBe<JsonValue[]>();
+
+// An array whose item type is a wider array or `any` does not contain itself, so it is transformed as usual.
+expectTypeOf<Jsonify<unknown[][]>>().toBe<JsonValue[][]>();
+expectTypeOf<Jsonify<Array<readonly unknown[]>>>().toBe<JsonValue[][]>();
+expectTypeOf<Jsonify<any[]>>().toBe<any[]>();
+
+// An array of an object that contains the array is not an array that contains itself, so it is transformed as usual.
+type Tree = {created: Date; children: Tree[]};
+expectTypeOf<Jsonify<Tree>['children'][number]['children'][number]['created']>().toBe<string>();
+
+// A long tuple does not hit the recursion limit.
+expectTypeOf<Jsonify<TupleOf<200, Date>>>().toBe<TupleOf<200, string>>();
+expectTypeOf<Jsonify<[...TupleOf<200, Date>, ...Date[]]>>().toBe<[...TupleOf<200, string>, ...string[]]>();
+
+// A symbol-valued alternative may omit a property entirely.
+expectTypeOf<{keep: 1}>().toBeAssignableTo<Jsonify<{keep: 1; value: string | symbol}>>();
+expectTypeOf<{keep: 1}>().toBeAssignableTo<Jsonify<{keep: 1; value: {toJSON(): string | symbol}}>>();
+
+// Both possible serialized shapes remain assignable, without advertising a required value.
+type SymbolPayload = {keep: 1; value: string | symbol};
+const omittedSymbolOutput = {keep: 1} as const;
+const retainedSymbolOutput = {keep: 1, value: 'retained'} as const;
+expectTypeOf(omittedSymbolOutput).toBeAssignableTo<Jsonify<SymbolPayload>>();
+expectTypeOf(retainedSymbolOutput).toBeAssignableTo<Jsonify<SymbolPayload>>();
+expectTypeOf<Jsonify<SymbolPayload>>().toBe<{keep: 1; value?: string}>();
+expectTypeOf<Jsonify<SymbolPayload>>().not.toBeAssignableTo<{value: string}>();
+expectTypeOf<keyof Jsonify<SymbolPayload>>().toBe<'keep' | 'value'>();
+expectTypeOf<Jsonify<{keep: 1; value: {toJSON(): string | symbol}}>>().not.toBeAssignableTo<{value: string}>();
+declare const serializedSymbolPayload: Jsonify<SymbolPayload>;
+expectTypeOf(serializedSymbolPayload.value).toBe<string | undefined>();
+expectTypeOf<{value: undefined}>().not.toBeAssignableTo<Jsonify<{value: string | symbol}>>();
+
+// Existing optional symbol alternatives retain their serializable value.
+expectTypeOf<Jsonify<{keep: 1; value?: string | symbol}>>().toBe<{keep: 1; value?: string}>();
+expectTypeOf<Jsonify<{keep: 1; value: string | symbol | undefined}>>().toBe<{keep: 1; value?: string}>();
+expectTypeOf<Jsonify<{readonly keep: 1; value?: string | symbol}>>().toBe<{readonly keep: 1; value?: string}>();
+expectTypeOf<Jsonify<{keep?: Date; value: null | symbol}>>().toBe<{keep?: string; value?: null}>();
+expectTypeOf<Jsonify<{outer: {keep: 1; value: string | symbol}}>>().toBe<{outer: {keep: 1; value?: string}}>();
+expectTypeOf<Jsonify<Array<{keep: 1; value: string | symbol}>>>().toBe<Array<{keep: 1; value?: string}>>();
+expectTypeOf<Jsonify<{values: string[] | symbol}>>().toBe<{values?: string[]}>();
+
+// Function alternatives can disappear while their serializable alternatives remain optional.
+expectTypeOf<Jsonify<{value: string | (() => void)}>>().toBe<{value?: string}>();
+expectTypeOf<Jsonify<{value?: string | (() => void)}>>().toBe<{value?: string}>();
+
+// The hook runs before classifying its result, including for callable values.
+expectTypeOf<Jsonify<{keep: 1; value: {toJSON(key: string): symbol | number}}>>().toBe<{keep: 1; value?: number}>();
+expectTypeOf<Jsonify<{keep: 1; value?: {toJSON(): string | symbol}}>>().toBe<{keep: 1; value?: string}>();
+expectTypeOf<Jsonify<{value: {(): void; toJSON(): string}}>>().toBe<{value: string}>();
+expectTypeOf<Jsonify<{value: {toJSON(): {name: string}}}>>().toBe<{value: {name: string}}>();
+
+// Index signatures retain their serializable values, and symbol keys are omitted.
+expectTypeOf<Jsonify<{[key: string]: string | symbol; id: 'kept'}>>().toBe<{[key: string]: string; id: 'kept'}>();
+expectTypeOf<Jsonify<{[key: number]: number | symbol; keep: 1}>>().toBe<{[key: number]: number; keep: 1}>();
+expectTypeOf<Jsonify<{0: string | symbol; '1': number | symbol; readonly keep?: Date}>>().toBe<{0?: string; '1'?: number; readonly keep?: string}>();
+expectTypeOf<Jsonify<{[uniqueSymbol]: string | symbol; readonly keep: 1}>>().toBe<{readonly keep: 1}>();
+expectTypeOf<Jsonify<{readonly keep: 1; readonly optional?: {name: string}; value: string | symbol}>>()
+	.toBe<{readonly keep: 1; readonly optional?: {name: string}; value?: string}>();
+
+// Sentinel values keep their existing escape behavior.
+expectTypeOf<Jsonify<{any: any; unknown: unknown; impossible: never; value: string | symbol}>>()
+	.toBe<{any: any; unknown: JsonValue; value?: string}>();
+expectTypeOf<Jsonify<any>>().toBe<any>();
+expectTypeOf<Jsonify<unknown>>().toBe<JsonValue>();
+expectTypeOf<Jsonify<never>>().toBe<never>();
+expectTypeOf<Jsonify<string | symbol>>().toBe<string>();
+expectTypeOf<Jsonify<symbol>>().toBe<never>();
+
+// Array positions become null instead of disappearing, and bigint still throws rather than omitting a key.
+expectTypeOf<Jsonify<Array<string | symbol>>>().toBe<Array<string | null>>();
+expectTypeOf<Jsonify<[1, string | symbol]>>().toBe<[1, string | null]>();
+expectTypeOf<Jsonify<{keep: 1; value: string | bigint}>>().toBe<{keep: 1; value: string}>();
+expectTypeOf<Jsonify<{value: {toJSON(): string | bigint}}>>().toBe<{value: string}>();
+expectTypeOf<Jsonify<SymbolPayload>>().toBeAssignableTo<JsonValue>();
+expectTypeOf<Jsonify<Jsonify<SymbolPayload>>>().toBe<Jsonify<SymbolPayload>>();
+
+// Bigint typed-array elements cannot become numeric JSON properties, but an empty view serializes as {}.
+expectTypeOf<Jsonify<BigInt64Array>>().toBe<Record<string, never>>();
+expectTypeOf<Jsonify<BigUint64Array>>().toBe<Record<string, never>>();
+expectTypeOf<{0: 1}>().not.toBeAssignableTo<Jsonify<BigInt64Array>>();
+expectTypeOf<Jsonify<{values: BigInt64Array}>>().toBe<{values: Record<string, never>}>();
+
+// Empty views remain valid, and neither numbers nor bigint values are invented as JSON properties.
+expectTypeOf<{}>().toBeAssignableTo<Jsonify<BigInt64Array>>();
+expectTypeOf<{}>().toBeAssignableTo<Jsonify<BigUint64Array>>();
+expectTypeOf<{0: 1n}>().not.toBeAssignableTo<Jsonify<BigUint64Array>>();
+expectTypeOf<{0: undefined}>().not.toBeAssignableTo<Jsonify<BigInt64Array>>();
+expectTypeOf<Jsonify<BigInt64Array>>().toBeAssignableTo<JsonValue>();
+declare const bigintViewJson: Jsonify<BigInt64Array>;
+expectTypeOf(bigintViewJson['0']).toBe<undefined>();
+expectTypeOf<Jsonify<{readonly values?: BigUint64Array}>>().toBe<{readonly values?: Record<string, never>}>();
+expectTypeOf<Jsonify<readonly [BigInt64Array, Uint8Array]>>().toBe<[Record<string, never>, Record<string, number>]>();
+expectTypeOf<Jsonify<BigUint64Array[]>>().toBe<Array<Record<string, never>>>();
+expectTypeOf<Jsonify<BigInt64Array | null>>().toBe<Record<string, never> | null>();
+expectTypeOf<Jsonify<BigInt64Array | BigUint64Array>>().toBe<Record<string, never>>();
+expectTypeOf<Jsonify<Array<BigInt64Array | symbol>>>().toBe<Array<Record<string, never> | null>>();
+
+// Numeric element types remain numeric, regardless of the backing buffer.
+expectTypeOf<Jsonify<Uint8Array | Float64Array>>().toBe<Record<string, number>>();
+expectTypeOf<Jsonify<Uint8Array<ArrayBuffer>>>().toBe<Record<string, number>>();
+expectTypeOf<Jsonify<Uint8Array<SharedArrayBuffer>>>().toBe<Record<string, number>>();
+expectTypeOf<Jsonify<BigInt64Array<SharedArrayBuffer>>>().toBe<Record<string, never>>();
+expectTypeOf<{0: 1}>().toBeAssignableTo<Jsonify<Uint8Array | BigInt64Array>>();
+expectTypeOf<{0: '1'}>().not.toBeAssignableTo<Jsonify<Uint8Array>>();
+
+// A custom toJSON method still runs before typed-array element conversion.
+expectTypeOf<Jsonify<BigInt64Array & {toJSON(): string[]}>>().toBe<string[]>();
+expectTypeOf<Jsonify<BigUint64Array & {toJSON(key: string): {count: number}}>>().toBe<{count: number}>();
+expectTypeOf<Jsonify<{toJSON(): BigInt64Array}>>().toBe<Record<string, never>>();
+expectTypeOf<Jsonify<{values: BigInt64Array & {toJSON(): string}}>>().toBe<{values: string}>();
+expectTypeOf<Jsonify<{values: BigInt64Array | undefined}>>().toBe<{values?: Record<string, never>}>();
+expectTypeOf<Jsonify<{values: BigInt64Array | symbol}>>().toBe<{values?: Record<string, never>}>();
+
+declare function serializeTypedView<View extends TypedArray>(value: View): Jsonify<View>;
+expectTypeOf(serializeTypedView(new BigInt64Array())).toBe<Record<string, never>>();
+expectTypeOf(serializeTypedView(new Uint8Array([1]))).toBe<Record<string, number>>();
+declare const possibleTypedView: Uint8Array | BigInt64Array;
+expectTypeOf(serializeTypedView(possibleTypedView)).toBeAssignableTo<Record<string, number>>();
+// @ts-expect-error
+serializeTypedView(new DataView(new ArrayBuffer(8)));
+
+function typedViewJsonValue<View extends TypedArray>(value: Jsonify<View>): JsonValue {
+	return value;
+}
+
+expectTypeOf(typedViewJsonValue<BigUint64Array>({})).toBe<JsonValue>();
+// @ts-expect-error
+typedViewJsonValue<BigUint64Array>({0: 1});
+
+// BigInt wrappers are unboxed before serialization and fail like their primitive values.
+expectTypeOf<Jsonify<BigInt>>().toBe<never>();
+expectTypeOf<Jsonify<BigInt[]>>().toBe<null[]>();
+expectTypeOf<Jsonify<[BigInt, string]>>().toBe<[null, string]>();
+
+expectTypeOf<{}>().not.toBeAssignableTo<Jsonify<BigInt>>();
+expectTypeOf<Jsonify<string | BigInt>>().toBe<string>();
+expectTypeOf<Jsonify<BigInt | bigint>>().toBe<never>();
+expectTypeOf<Jsonify<{value: BigInt}>>().toBe<Jsonify<{value: bigint}>>();
+expectTypeOf<Jsonify<{readonly value?: BigInt}>>().toBe<{readonly value?: never}>();
+expectTypeOf<Jsonify<{readonly value: BigInt | undefined}>>().toBe<{readonly value?: never}>();
+expectTypeOf<Jsonify<{value: string | BigInt}>>().toBe<{value: string}>();
+
+// Arrays retain the existing primitive-bigint fallback for unrepresentable elements.
+expectTypeOf<Jsonify<readonly BigInt[]>>().toBe<null[]>();
+expectTypeOf<Jsonify<Array<BigInt | number>>>().toBe<Array<null | number>>();
+expectTypeOf<Jsonify<readonly [BigInt, Date]>>().toBe<[null, string]>();
+expectTypeOf<Jsonify<[BigInt?]>>().toBe<[] | [null]>();
+expectTypeOf<Jsonify<{values: BigInt[]}>>().toBe<{values: null[]}>();
+
+// Custom hooks are honored before primitive wrappers are classified.
+expectTypeOf<Jsonify<BigInt & {toJSON(): string}>>().toBe<string>();
+expectTypeOf<Jsonify<BigInt & {toJSON(key: string): {value: number}}>>().toBe<{value: number}>();
+expectTypeOf<Jsonify<BigInt & {toJSON(): undefined}>>().toBe<never>();
+expectTypeOf<Jsonify<{value: BigInt & {toJSON(): string}}>>().toBe<{value: string}>();
+expectTypeOf<Jsonify<Array<BigInt & {toJSON(): string}>>>().toBe<string[]>();
+expectTypeOf<Jsonify<{toJSON(): BigInt}>>().toBe<never>();
+expectTypeOf<Jsonify<{toJSON(): BigInt | string}>>().toBe<string>();
+expectTypeOf<Jsonify<Array<{toJSON(): BigInt}>>>().toBe<null[]>();
+
+declare function serializeBoxedValue<Value>(value: Value): Jsonify<Value>;
+declare const boxedBigintValue: BigInt;
+declare const boxedBigintWithHook: BigInt & {toJSON(): string};
+expectTypeOf(serializeBoxedValue(boxedBigintValue)).toBe<never>();
+expectTypeOf(serializeBoxedValue([boxedBigintValue])).toBe<null[]>();
+expectTypeOf(serializeBoxedValue({value: boxedBigintWithHook})).toBe<{value: string}>();
+
+// A hook returning an already-JSON readonly tuple can be used without copying its value.
+function readonlyHookResult(value: readonly [1, 2]): Jsonify<{toJSON(): readonly [1, 2]}> {
+	return value;
+}
+
+expectTypeOf(readonlyHookResult([1, 2] as const)).toBe<readonly [1, 2]>();
+expectTypeOf<Jsonify<{toJSON(): readonly [number?, string?]}>>().toBe<[] | [number | null] | [number | null, string | null]>();
+expectTypeOf<Jsonify<{toJSON(): JsonValue}>>().toBe<JsonValue>();
+
+// Generic serializers can construct and read an output whose hook and omitted fields are already normalized.
+type EncodableEvent<Value> = {readonly payload: {raw: Value; toJSON(): string}; readonly createdAt: Date; ignored?: () => void; [uniqueSymbol]?: unknown};
+function encodeJsonEvent<const Value>(value: Value, encode: (value: Value) => string): Jsonify<EncodableEvent<Value>> {
+	return {payload: encode(value), createdAt: new Date(0).toISOString()};
+}
+
+function _readEncodedJsonEvent<Value>(value: Jsonify<EncodableEvent<Value>>): string {
+	return value.payload;
+}
+
+function _useEncodedJsonEvent<Value>(value: Jsonify<EncodableEvent<Value>>): JsonValue {
+	return value;
+}
+
+const encodedJsonEvent = encodeJsonEvent({id: 'event', values: [1, 2]}, value => {
+	expectTypeOf(value.values).toBe<readonly [1, 2]>();
+	return value.id;
+});
+expectTypeOf(encodedJsonEvent).toBe<{readonly payload: string; readonly createdAt: string}>();
+expectTypeOf<keyof typeof encodedJsonEvent>().toBe<'payload' | 'createdAt'>();
+// @ts-expect-error The normalized result retains readonly even for an otherwise valid value.
+encodedJsonEvent.payload = 'event';
+
+// Required serializable siblings stay readable before the generic payload is known.
+function _readRequiredJsonId<Value>(value: Jsonify<{readonly id: 'event'; payload: Value}>): 'event' {
+	return value.id;
+}
+
+function _readRequiredJsonDate<Value>(value: Jsonify<{payload: Value; createdAt: Date}>): string {
+	return value.createdAt;
+}
+
+// A JSON-compatible hook result still normalizes explicit non-finite numeric values.
+const positiveInfinityHookResult: Jsonify<{toJSON(): PositiveInfinity}> = null;
+expectTypeOf(positiveInfinityHookResult).toBe<null>();
+
+function _readNegativeInfinityHookResult(value: Jsonify<{toJSON(): NegativeInfinity}>): null {
+	return value;
+}
+
+expectTypeOf<Jsonify<{toJSON(): {readonly limit: PositiveInfinity}}>>().toBe<{readonly limit: null}>();
+expectTypeOf<Jsonify<{toJSON(): readonly [1, PositiveInfinity]}>>().toBe<readonly [1, null]>();
+expectTypeOf<Jsonify<{toJSON(): readonly PositiveInfinity[]}>>().toBe<readonly null[]>();
+
+// JSON-compatible hooks retain readonly and optional shapes while normalizing recursive numeric leaves.
+type InfiniteHookNode = {readonly limit?: PositiveInfinity; readonly next?: InfiniteHookNode};
+type NormalizedHookNode = {readonly limit?: null; readonly next?: NormalizedHookNode};
+expectTypeOf<Jsonify<{toJSON(): InfiniteHookNode}>>().toBe<NormalizedHookNode>();
+
+type InfiniteHookList = PositiveInfinity | readonly InfiniteHookList[];
+type NormalizedHookList = null | readonly NormalizedHookList[];
+expectTypeOf<Jsonify<{toJSON(): InfiniteHookList}>>().toBe<NormalizedHookList>();
+expectTypeOf<Jsonify<{toJSON(): PositiveInfinity | {readonly limit: NegativeInfinity}}>>().toBe<null | {readonly limit: null}>();
+expectTypeOf<Jsonify<{toJSON(): {readonly id: 1; [uniqueSymbol]: () => void}}>>().toBe<{readonly id: 1}>();
+
+function _readTaggedHookTuple(value: Jsonify<{toJSON(): Tagged<readonly [1, PositiveInfinity], 'Row'>}>): string {
+	return value.map(String).join(',');
+}
+
+expectTypeOf<Jsonify<{toJSON(): Tagged<readonly [1, PositiveInfinity], 'Row'>}>>().toBe<readonly [1, null]>();
+
+function encodeReadonlyHook<const Value>(value: Value, encode: (value: Value) => readonly [1, 2]): Jsonify<{toJSON(): readonly [1, 2]}> {
+	return encode(value);
+}
+
+const encodedReadonlyHook = encodeReadonlyHook({id: 'event'}, value => {
+	expectTypeOf(value.id).toBe<'event'>();
+	return [1, 2] as const;
+});
+expectTypeOf(encodedReadonlyHook).toBe<readonly [1, 2]>();
+// @ts-expect-error The JSON-compatible hook's readonly tuple cannot be changed to an otherwise valid value.
+encodedReadonlyHook[0] = 1;
+
+// A generic JSON-valued hook remains usable by consumers of JSON, and concrete hook literals stay precise.
+function _readGenericJsonHook<Value extends JsonValue>(value: Jsonify<{toJSON(): Value}>): JsonValue {
+	return value;
+}
+
+declare function serializeJsonHook<const Value extends {toJSON(): JsonValue}>(value: Value): Jsonify<Value>;
+const literalJsonHook = serializeJsonHook({toJSON: () => 'ready' as const});
+expectTypeOf(literalJsonHook).toBe<'ready'>();
+
+// A callable alternative can disappear, but a serializable field value must remain accessible.
+expectTypeOf<Jsonify<{label: string | (() => string)}>>().toBe<{label?: string}>();
+expectTypeOf<Jsonify<{readonly label: string | (() => string)}>>().toBe<{readonly label?: string}>();
+expectTypeOf<Jsonify<{label?: string | (() => string)}>>().toBe<{label?: string}>();
+
+expectTypeOf<Jsonify<{value: false | null | (() => void)}>>().toBe<{value?: false | null}>();
+expectTypeOf<Jsonify<{value: Date | Function}>>().toBe<{value?: string}>();
+expectTypeOf<Jsonify<{value: string | (new () => Date)}>>().toBe<{value?: string}>();
+expectTypeOf<Jsonify<{outer: {label: string | (() => string)}}>>().toBe<{outer: {label?: string}}>();
+expectTypeOf<Jsonify<{label: {toJSON(): string | (() => string)}}>>().toBe<{label?: string}>();
+expectTypeOf<Jsonify<{label: string | ((() => void) & {toJSON(): string})}>>().toBe<{label: string}>();
+
+function readJsonLabel(value: Jsonify<{label: string | (() => string)}>): string | undefined {
+	return value.label;
+}
+
+expectTypeOf(readJsonLabel({label: 'ready'})).toBe<string | undefined>();
+expectTypeOf(readJsonLabel({})).toBe<string | undefined>();
+// @ts-expect-error The serialized field cannot contain the original callable value.
+readJsonLabel({label: () => 'ready'});
+expectTypeOf<Jsonify<{label: string | (() => string)}>>().toBeAssignableTo<JsonValue>();
+
+// Scalar alternatives do not prevent identifying the array's recursive member.
+type NestedSetting = 'automatic' | number | null | readonly NestedSetting[];
+expectTypeOf<Jsonify<readonly NestedSetting[]>>().toBe<readonly NestedSetting[]>();
+expectTypeOf<Jsonify<{settings: readonly NestedSetting[]}>>().toBe<{settings: readonly NestedSetting[]}>();
+expectTypeOf<readonly ['automatic', readonly [1, null]]>().toBeAssignableTo<Jsonify<readonly NestedSetting[]>>();
+expectTypeOf<readonly [Date]>().not.toBeAssignableTo<Jsonify<readonly NestedSetting[]>>();
+
+type NestedDraft = string | boolean | Date | undefined | readonly NestedDraft[];
+expectTypeOf<Jsonify<NestedDraft>>().toBe<string | boolean | JsonValue[]>();
+expectTypeOf<Jsonify<readonly NestedDraft[]>>().toBe<JsonValue[]>();
+expectTypeOf<Jsonify<{drafts: readonly NestedDraft[]}>>().toBe<{drafts: JsonValue[]}>();
+
+// Ordinary nested arrays and objects still transform each alternative independently.
+type MixedList = Array<string | Date | readonly number[] | (() => void) | {created: Date}>;
+expectTypeOf<Jsonify<MixedList>>().toBe<Array<string | number[] | {created: string} | null>>();
+expectTypeOf<Jsonify<MixedList>>().toBeAssignableTo<JsonValue>();
+expectTypeOf<Array<{created: Date}>>().not.toBeAssignableTo<Jsonify<MixedList>>();
+
+function _readGenericScalarArray<Value extends string | number>(value: Jsonify<Value[]>): JsonValue {
+	return value;
+}
+
+function _readGenericJsonArray<Value extends JsonValue>(value: Jsonify<Value[]>): JsonValue {
+	return value;
+}
+
+// An element's hook may return an array without making the containing array recursive.
+expectTypeOf<Jsonify<Array<string | {toJSON(): readonly Date[]}>>>().toBe<Array<string | string[]>>();
+expectTypeOf<Jsonify<Array<readonly [Date, undefined] | number>>>().toBe<Array<[string, null] | number>>();
+
+// Non-JSON list values become null, while other falsy values and JSON-compatible alternatives survive.
+type FalsyListValues = 0 | false | '' | null | undefined | symbol | (() => void);
+expectTypeOf<Jsonify<FalsyListValues[]>>().toBe<Array<0 | false | '' | null>>();
+expectTypeOf<Jsonify<Array<{toJSON(): 0 | false | undefined | symbol}>>>().toBe<Array<0 | false | null>>();
+expectTypeOf<Jsonify<[undefined, never, unknown, any]>>().toBe<[null, null, JsonValue, any]>();
+expectTypeOf<undefined[]>().not.toBeAssignableTo<Jsonify<FalsyListValues[]>>();
+
+// A function returned by `toJSON` is omitted even if that function has its own `toJSON` method.
+type ReturnedFunctionWithHook = (() => void) & {toJSON(): string};
+type ReturnsFunctionWithHook = {toJSON(): ReturnedFunctionWithHook};
+expectTypeOf<Jsonify<ReturnsFunctionWithHook>>().toBe<never>();
+expectTypeOf<Jsonify<{readonly keep: 1; value: ReturnsFunctionWithHook}>>().toBe<{readonly keep: 1}>();
+expectTypeOf<Jsonify<ReturnsFunctionWithHook[]>>().toBe<null[]>();
+expectTypeOf<Jsonify<readonly [1, ReturnsFunctionWithHook]>>().toBe<[1, null]>();
+expectTypeOf<Jsonify<{readonly value?: ReturnsFunctionWithHook}>>().toBe<{}>();
+expectTypeOf<Jsonify<{value: {toJSON(): string | ReturnedFunctionWithHook}}>>().toBe<{value?: string}>();
+expectTypeOf<Jsonify<Array<{toJSON(): ReturnedFunctionWithHook | {readonly id: 1}}>>>().toBe<Array<{readonly id: 1} | null>>();
+// A source function's own hook still runs, unlike the hook on a returned function.
+expectTypeOf<Jsonify<ReturnedFunctionWithHook>>().toBe<string>();

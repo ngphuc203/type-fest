@@ -1,0 +1,295 @@
+import {expectTypeOf} from 'nz';
+import type {
+	Finite,
+	IsNegative,
+	Opaque,
+	Float,
+	Integer,
+	Negative,
+	NegativeFloat,
+	NegativeInfinity,
+	NegativeInteger,
+	NonNegative,
+	NonNegativeInteger,
+	PositiveInfinity,
+	Tagged,
+} from '../index.d.ts';
+
+// Finite
+declare const infinity: Finite<PositiveInfinity | NegativeInfinity>;
+declare const infinityMixed: Finite<1 | PositiveInfinity | NegativeInfinity>;
+
+expectTypeOf(infinity).toBe<never>();
+expectTypeOf(infinityMixed).toBe<1>();
+expectTypeOf<Finite<-1.5>>().toBe<-1.5>();
+expectTypeOf<Finite<1e308>>().toBe<1e308>();
+
+expectTypeOf<Finite<Tagged<5, 'Score'>>>().toBe<Tagged<5, 'Score'>>();
+expectTypeOf<Finite<Tagged<PositiveInfinity, 'Score'>>>().toBe<never>();
+expectTypeOf<Finite<any>>().toBe<never>();
+expectTypeOf<Finite<never>>().toBe<never>();
+
+// `NaN`, `Infinity`, and `-Infinity` values are typed as `number`, so a wide `number` is rejected.
+expectTypeOf<Finite<number>>().toBe<never>();
+expectTypeOf<Finite<typeof Number.NaN>>().toBe<never>();
+expectTypeOf<Finite<Tagged<number, 'Score'>>>().toBe<never>();
+expectTypeOf<Finite<1 | Tagged<number, 'Score'>>>().toBe<1>();
+
+enum Level {
+	Low = 1,
+	High = 2,
+}
+
+expectTypeOf<Finite<Level>>().toBe<Level.Low | Level.High>();
+expectTypeOf<Finite<Level.Low>>().toBe<Level.Low>();
+
+declare function setScore<T extends number>(score: Finite<T>): void;
+declare const wideNumber: number;
+declare const level: Level;
+declare const positiveInfinity: PositiveInfinity;
+setScore(1.5);
+setScore(level);
+// @ts-expect-error
+setScore(wideNumber);
+// @ts-expect-error
+setScore(NaN);
+// @ts-expect-error
+setScore(positiveInfinity);
+
+// A value that is only known at runtime is accepted through a brand that the parameter type adds.
+type FiniteNumber = Tagged<number, 'Finite'>;
+declare function setCheckedScore<T extends number>(score: Finite<T> | FiniteNumber): void;
+declare const checkedScore: FiniteNumber;
+declare const amount: Tagged<number, 'Amount'>;
+setCheckedScore(1.5);
+setCheckedScore(checkedScore);
+declare const literalOrChecked: 1 | FiniteNumber;
+setCheckedScore(literalOrChecked);
+// @ts-expect-error
+setCheckedScore(amount);
+// @ts-expect-error
+setCheckedScore(positiveInfinity);
+// @ts-expect-error
+setCheckedScore(wideNumber);
+
+// Integer
+declare const integer: Integer<1>;
+declare const integerWithDecimal: Integer<1.0>; // eslint-disable-line unicorn/no-zero-fractions
+declare const numberType: Integer<number>;
+declare const integerMixed: Integer<1 | 1.5 | -1>;
+declare const bigInteger: Integer<1e+100>;
+declare const octalInteger: Integer<0o10>;
+declare const binaryInteger: Integer<0b10>;
+declare const hexadecimalInteger: Integer<0x10>;
+declare const nonInteger: Integer<1.5>;
+declare const infinityInteger: Integer<PositiveInfinity | NegativeInfinity>;
+const infinityValue = Infinity;
+declare const infinityInteger2: Integer<typeof infinityValue>;
+
+expectTypeOf(integer).toBe<1>();
+expectTypeOf(integerWithDecimal).toBe<1>();
+expectTypeOf(numberType).toBe<never>();
+expectTypeOf(integerMixed).toBe<1 | -1>();
+expectTypeOf(bigInteger).toBe<1e+100>();
+expectTypeOf(octalInteger).toBe<0o10>();
+expectTypeOf(binaryInteger).toBe<0b10>();
+expectTypeOf(hexadecimalInteger).toBe<0x10>();
+expectTypeOf(nonInteger).toBe<never>();
+expectTypeOf(infinityInteger).toBe<never>();
+expectTypeOf(infinityInteger2).toBe<never>();
+
+// Float
+declare const float: Float<1.5>;
+declare const floatMixed: Float<1 | 1.5 | -1.5>;
+declare const nonFloat: Float<1>;
+declare const infinityFloat: Float<PositiveInfinity | NegativeInfinity>;
+
+expectTypeOf(float).toBe<1.5>();
+expectTypeOf(floatMixed).toBe<1.5 | -1.5>();
+expectTypeOf(nonFloat).toBe<never>();
+expectTypeOf(infinityFloat).toBe<never>();
+
+// Negative
+declare const negative: Negative<-1 | -1n | 0 | 0n | 1 | 1n>;
+
+expectTypeOf(negative).toBe<-1 | -1n>();
+expectTypeOf<Negative<NegativeInfinity>>().toBe<never>();
+expectTypeOf<Negative<-1 | NegativeInfinity>>().toBe<-1>();
+expectTypeOf<Negative<Tagged<NegativeInfinity, 'Amount'>>>().toBe<never>();
+expectTypeOf<Negative<Opaque<NegativeInfinity, 'Amount'>>>().toBe<never>();
+expectTypeOf<Negative<Tagged<Tagged<NegativeInfinity, 'Amount'>, 'Validated'>>>().toBe<never>();
+expectTypeOf<Negative<-1 | NegativeInfinity | Tagged<-2 | NegativeInfinity, 'Amount'>>>().toBe<-1 | Tagged<-2, 'Amount'>>();
+expectTypeOf<Negative<-1n | NegativeInfinity>>().toBe<-1n>();
+expectTypeOf<Negative<PositiveInfinity>>().toBe<never>();
+expectTypeOf<Negative<NegativeInfinity | PositiveInfinity>>().toBe<never>();
+expectTypeOf<Negative<-0>>().toBe<never>();
+expectTypeOf<Negative<any>>().toBe<never>();
+
+// A wide `number` or `bigint` can be non-negative, so it is rejected.
+expectTypeOf<Negative<number>>().toBe<never>();
+expectTypeOf<Negative<bigint>>().toBe<never>();
+expectTypeOf<Negative<-1 | bigint>>().toBe<-1>();
+
+// A literal beyond the `number` range is `-Infinity`, while very large and very small finite literals are still accepted.
+expectTypeOf<Negative<-1e309>>().toBe<never>(); // eslint-disable-line no-loss-of-precision
+expectTypeOf<Negative<-1e308>>().toBe<-1e308>();
+expectTypeOf<Negative<-5e-324>>().toBe<-5e-324>();
+
+declare function setOffset<T extends number>(offset: Negative<T>): void;
+declare const negativeInfinity: NegativeInfinity;
+setOffset(-1);
+setOffset(-1.5);
+// @ts-expect-error
+setOffset(0);
+// @ts-expect-error
+setOffset(1);
+// @ts-expect-error
+setOffset(wideNumber);
+// @ts-expect-error
+setOffset(negativeInfinity);
+// @ts-expect-error
+setOffset(-1e309); // eslint-disable-line no-loss-of-precision
+
+// NegativeInteger
+declare const negativeInteger: NegativeInteger<-1 | 0 | 1>;
+
+expectTypeOf(negativeInteger).toBe<-1>();
+expectTypeOf<NegativeInteger<-1 | NegativeInfinity>>().toBe<-1>();
+
+// NegativeFloat
+declare const negativeFloat: NegativeFloat<-1.5 | -1 | 0 | 1 | 1.5>;
+
+expectTypeOf(negativeFloat).toBe<-1.5>();
+expectTypeOf<NegativeFloat<-1.5 | NegativeInfinity>>().toBe<-1.5>();
+
+// NonNegative
+declare const nonNegative: NonNegative<-1 | -1n | 0 | 0n | 1 | 1n>;
+
+expectTypeOf(nonNegative).toBe<0 | 0n | 1 | 1n>();
+expectTypeOf<NonNegative<NegativeInfinity>>().toBe<never>();
+expectTypeOf<NonNegative<PositiveInfinity>>().toBe<never>();
+expectTypeOf<NonNegative<1 | PositiveInfinity>>().toBe<1>();
+expectTypeOf<NonNegative<Tagged<PositiveInfinity, 'Amount'>>>().toBe<never>();
+expectTypeOf<NonNegative<Opaque<PositiveInfinity, 'Amount'>>>().toBe<never>();
+expectTypeOf<NonNegative<Tagged<Tagged<PositiveInfinity, 'Amount'>, 'Validated'>>>().toBe<never>();
+expectTypeOf<NonNegative<NegativeInfinity | PositiveInfinity>>().toBe<never>();
+expectTypeOf<NonNegative<0 | 0n | NegativeInfinity | PositiveInfinity>>().toBe<0 | 0n>();
+expectTypeOf<NonNegative<-0>>().toBe<0>();
+expectTypeOf<NonNegative<0x10 | -0x10>>().toBe<0x10>();
+expectTypeOf<NonNegative<Level>>().toBe<Level.Low | Level.High>();
+expectTypeOf<NonNegative<any>>().toBe<never>();
+
+// A wide `number` or `bigint` can be negative, so it is rejected.
+expectTypeOf<NonNegative<number>>().toBe<never>();
+expectTypeOf<NonNegative<bigint>>().toBe<never>();
+expectTypeOf<NonNegative<1 | bigint>>().toBe<1>();
+expectTypeOf<NonNegative<-1 | 2 | Tagged<number, 'Amount'>>>().toBe<2>();
+
+// A literal beyond the `number` range is `Infinity`, while very large and very small finite literals are still accepted.
+expectTypeOf<NonNegative<1e309>>().toBe<never>(); // eslint-disable-line no-loss-of-precision
+expectTypeOf<NonNegative<1e308>>().toBe<1e308>();
+expectTypeOf<NonNegative<5e-324>>().toBe<5e-324>();
+
+declare function setLength<T extends number>(length: NonNegative<T>): void;
+setLength(0);
+setLength(1);
+setLength(level);
+// @ts-expect-error
+setLength(-1);
+// @ts-expect-error
+setLength(wideNumber);
+// @ts-expect-error
+setLength(positiveInfinity);
+// @ts-expect-error
+setLength(negativeInfinity);
+// @ts-expect-error
+setLength(1e309); // eslint-disable-line no-loss-of-precision
+declare const taggedPositiveInfinity: Tagged<PositiveInfinity, 'Amount'>;
+// @ts-expect-error
+setLength(taggedPositiveInfinity);
+
+// NonNegativeInteger
+declare const nonNegativeInteger: NonNegativeInteger<-1 | 0 | 1>;
+
+expectTypeOf(nonNegativeInteger).toBe<0 | 1>();
+expectTypeOf<NonNegativeInteger<number>>().toBe<never>();
+expectTypeOf<NonNegativeInteger<1 | PositiveInfinity>>().toBe<1>();
+
+// IsNegative
+expectTypeOf<IsNegative<-1>>().toBe<true>();
+expectTypeOf<IsNegative<-1.5>>().toBe<true>();
+expectTypeOf<IsNegative<-1n>>().toBe<true>();
+expectTypeOf<IsNegative<1>>().toBe<false>();
+expectTypeOf<IsNegative<0>>().toBe<false>();
+expectTypeOf<IsNegative<-0>>().toBe<false>();
+expectTypeOf<IsNegative<0n>>().toBe<false>();
+expectTypeOf<IsNegative<-1 | 1>>().toBe<boolean>();
+expectTypeOf<IsNegative<Level>>().toBe<false>();
+expectTypeOf<IsNegative<number>>().toBe<false>();
+expectTypeOf<IsNegative<bigint>>().toBe<false>();
+expectTypeOf<IsNegative<any>>().toBe<boolean>();
+expectTypeOf<IsNegative<never>>().toBe<never>();
+
+// `IsNegative` reports the sign, so it still treats `-Infinity` as negative.
+expectTypeOf<IsNegative<NegativeInfinity>>().toBe<true>();
+expectTypeOf<IsNegative<PositiveInfinity>>().toBe<false>();
+expectTypeOf<IsNegative<-1e309>>().toBe<true>(); // eslint-disable-line no-loss-of-precision
+expectTypeOf<IsNegative<Tagged<NegativeInfinity, 'Amount'>>>().toBe<true>();
+expectTypeOf<IsNegative<Tagged<PositiveInfinity, 'Amount'>>>().toBe<false>();
+
+// A branded literal is still a literal, so the sign is read from its unbranded value.
+declare const brandedNegative: IsNegative<Opaque<-5, 'A'>>;
+expectTypeOf(brandedNegative).toBe<true>();
+
+declare const brandedPositive: IsNegative<Opaque<5, 'A'>>;
+expectTypeOf(brandedPositive).toBe<false>();
+
+// Multiple tags do not change whether the primitive value is negative.
+expectTypeOf<IsNegative<Tagged<Tagged<-5, 'Value'>, 'Validated'>>>().toBe<true>();
+expectTypeOf<IsNegative<Tagged<Tagged<5, 'Value'>, 'Validated'>>>().toBe<false>();
+
+// Sign filters preserve the brand on accepted values and reject opposite signs.
+type NegativeAmount = Tagged<-5, 'Amount'>;
+type PositiveAmount = Tagged<5, 'Amount'>;
+expectTypeOf<Negative<NegativeAmount>>().toBe<NegativeAmount>();
+expectTypeOf<NonNegative<NegativeAmount>>().toBe<never>();
+expectTypeOf<NegativeInteger<NegativeAmount>>().toBe<NegativeAmount>();
+expectTypeOf<NonNegativeInteger<NegativeAmount>>().toBe<never>();
+expectTypeOf<NegativeFloat<Tagged<-1.5, 'Amount'>>>().toBe<Tagged<-1.5, 'Amount'>>();
+expectTypeOf<Negative<PositiveAmount>>().toBe<never>();
+expectTypeOf<NonNegative<PositiveAmount>>().toBe<PositiveAmount>();
+
+// Zero remains non-negative, including when branded.
+type ZeroAmount = Tagged<0, 'Amount'>;
+expectTypeOf<Negative<ZeroAmount>>().toBe<never>();
+expectTypeOf<NonNegative<ZeroAmount>>().toBe<ZeroAmount>();
+expectTypeOf<NonNegativeInteger<ZeroAmount>>().toBe<ZeroAmount>();
+
+// Bigint signs follow the same filtering rules.
+type NegativeBigint = Tagged<-5n, 'Amount'>;
+type PositiveBigint = Tagged<5n, 'Amount'>;
+expectTypeOf<Negative<NegativeBigint>>().toBe<NegativeBigint>();
+expectTypeOf<NonNegative<NegativeBigint>>().toBe<never>();
+expectTypeOf<Negative<PositiveBigint>>().toBe<never>();
+expectTypeOf<NonNegative<PositiveBigint>>().toBe<PositiveBigint>();
+
+// Distribute before checking the sign and preserve each accepted member's brand.
+expectTypeOf<Negative<NegativeAmount | PositiveAmount | ZeroAmount>>().toBe<NegativeAmount>();
+expectTypeOf<NonNegative<NegativeAmount | PositiveAmount | ZeroAmount>>().toBe<PositiveAmount | ZeroAmount>();
+expectTypeOf<NegativeInteger<NegativeAmount | PositiveAmount | Tagged<-1.5, 'Amount'>>>().toBe<NegativeAmount>();
+expectTypeOf<NegativeFloat<NegativeAmount | Tagged<-1.5 | 1.5, 'Amount'>>>().toBe<Tagged<-1.5, 'Amount'>>();
+
+// Sign checks also work for stacked tags and user-defined primitive brands.
+type ValidatedNegative = Tagged<NegativeAmount, 'Validated'>;
+type CustomNegative = -5 & {readonly __brand: 'Amount'};
+expectTypeOf<Negative<ValidatedNegative>>().toBe<ValidatedNegative>();
+expectTypeOf<NonNegative<ValidatedNegative>>().toBe<never>();
+expectTypeOf<Negative<CustomNegative>>().toBe<CustomNegative>();
+expectTypeOf<NonNegative<CustomNegative>>().toBe<never>();
+expectTypeOf<Negative<Opaque<-5, 'Amount'>>>().toBe<Opaque<-5, 'Amount'>>();
+
+// Filtering cannot identify the sign of a widened number, so both reject it.
+expectTypeOf<Negative<Tagged<number, 'Amount'>>>().toBe<never>();
+expectTypeOf<NonNegative<Tagged<number, 'Amount'>>>().toBe<never>();
+expectTypeOf<Negative<never>>().toBe<never>();
+expectTypeOf<NonNegative<never>>().toBe<never>();

@@ -1,0 +1,59 @@
+import type {DelimiterCase} from './delimiter-case.d.ts';
+import type {UnwrapBrand} from './internal/index.d.ts';
+import type {WordsOptions} from './words.d.ts';
+import type {DelimiterCasedPropertiesDeep} from './delimiter-cased-properties-deep.d.ts'; // For `@link`
+
+/**
+Convert object properties to a custom string delimiter casing.
+
+This can be useful when, for example, converting some API types from a different style.
+
+@see {@link DelimiterCase}
+@see {@link DelimiterCasedPropertiesDeep}
+
+@example
+```
+import type {DelimiterCasedProperties} from 'type-fest';
+
+type User = {
+	userId: number;
+	userName: string;
+};
+
+const result: DelimiterCasedProperties<User, '-'> = {
+	'user-id': 1,
+	'user-name': 'Tom',
+};
+
+const splitOnNumbers: DelimiterCasedProperties<{line1: string}, '-', {splitOnNumbers: true}> = {
+	'line-1': 'string',
+};
+
+const splitOnPunctuation: DelimiterCasedProperties<{'foo::bar': string}, '-', {splitOnPunctuation: true}> = {
+	'foo-bar': 'string',
+};
+```
+
+@category Change case
+@category Template literal
+@category Object
+*/
+// Mapped choices keep generic leaf values reducible while selecting one delimiter for the whole result.
+export type DelimiterCasedProperties<
+	Value,
+	Delimiter extends string,
+	Options extends WordsOptions = {},
+> = [Delimiter] extends [never]
+	? DelimiterCasedPropertiesImplementation<Value, Delimiter, Options>
+	: {[Choice in UnwrapBrand<Delimiter> & string]: DelimiterCasedPropertiesImplementation<Value, Choice, Options>}[UnwrapBrand<Delimiter> & string];
+
+type DelimiterCasedPropertiesImplementation<Value, Delimiter extends string, Options extends WordsOptions> = Value extends Function
+	? Value
+	: Value extends readonly unknown[]
+		// Arrays pass through unchanged, since they have no properties to re-case.
+		? Value
+		: {[K in keyof Value as
+			DelimiterCase<K, Delimiter, Options>
+			]: Value[K]};
+
+export {};

@@ -1,0 +1,95 @@
+import type {ExtendsStrict} from './extends-strict.d.ts';
+import type {IfNotAnyOrNever} from './internal/type.d.ts';
+import type {OmitIndexSignature} from './omit-index-signature.d.ts';
+import type {PickIndexSignature} from './pick-index-signature.d.ts';
+import type {TupleToObject} from './tuple-to-object.d.ts';
+import type {UnknownArray} from './unknown-array.d.ts';
+
+/**
+Extract the keys from a type where the value type of the key extends the given `Condition`.
+
+Internally this is used for the `ConditionalPick` and `ConditionalExcept` types.
+
+@example
+```
+import type {ConditionalKeys} from 'type-fest';
+
+type Example = {
+	a: string;
+	b: string | number;
+	c?: string;
+	d: {};
+};
+
+type StringKeysOnly = ConditionalKeys<Example, string>;
+//=> 'a'
+```
+
+Note: To extract optional keys, make sure your `Condition` is a union of `undefined` (for example, `string | undefined`) as demonstrated below.
+
+@example
+```
+import type {ConditionalKeys} from 'type-fest';
+
+type StringKeysAndUndefined = ConditionalKeys<{a?: string}, string | undefined>;
+//=> 'a'
+
+type NoMatchingKeys = ConditionalKeys<{a?: string}, string>;
+//=> never
+```
+
+You can also extract array indices whose value match the specified condition, as shown below:
+```
+import type {ConditionalKeys} from 'type-fest';
+
+type StringValueIndices = ConditionalKeys<[string, number, string], string>;
+//=> '0' | '2'
+
+type NumberValueIndices = ConditionalKeys<[string, number?, string?], number | undefined>;
+//=> '1'
+```
+
+Note: To select keys by their name instead of by their value, use the built-in `Extract` type with `keyof`, and `Exclude` to drop the matching keys, as shown below.
+
+@example
+```
+import type {ConditionalKeys} from 'type-fest';
+
+type Settings = {
+	'data-user': string;
+	'data-id': number;
+	title: string;
+};
+
+type StringValueKeys = ConditionalKeys<Settings, string>;
+//=> 'data-user' | 'title'
+
+type DataKeys = Extract<keyof Settings, `data-${string}`>;
+//=> 'data-user' | 'data-id'
+
+type OtherKeys = Exclude<keyof Settings, `data-${string}`>;
+//=> 'title'
+```
+
+@category Object
+*/
+export type ConditionalKeys<Base, Condition> = (Base extends UnknownArray ? TupleToObject<Base> : Base) extends infer _Base // Remove non-numeric keys from arrays
+	? IfNotAnyOrNever<_Base, {ifNot: _ConditionalKeys<_Base, Condition>; ifAny: keyof _Base}>
+	: never;
+
+// An index signature widens `keyof` (for example, `string` becomes `string | number`), which swallows the declared literal keys it covers. So the declared keys are matched a second time on their own. The two key sets must stay separate, because a union of them collapses the literal keys back into the index signature.
+type _ConditionalKeys<Base, Condition> =
+	| _MatchingKeys<Base, Condition, keyof Base>
+	// Without an index signature, the first pass has already checked every declared key.
+	| ([keyof PickIndexSignature<Base>] extends [never]
+		? never
+		: _MatchingKeys<Base, Condition, keyof OmitIndexSignature<Base>>);
+
+type _MatchingKeys<Base, Condition, Keys> = keyof {
+	[
+	Key in (Keys & keyof Base) as // The intersection prevents homomorphism
+	ExtendsStrict<Base[Key], Condition> extends true ? Key : never
+	]: never
+};
+
+export {};

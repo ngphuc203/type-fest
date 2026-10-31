@@ -1,0 +1,566 @@
+import {expectTypeOf} from 'nz';
+import type {DigitCharacter, Get, LiteralUnion, Opaque, OptionalPaths, Paths, PickDeep, Tagged} from '../index.d.ts';
+
+declare class ClassA {
+	a: string;
+}
+
+type BaseType = {
+	string: string;
+	optionalString?: string;
+	array: number[];
+	readonlyArray: readonly number[];
+	tuples: ['foo', 'bar'];
+	objectArray: Array<{a: 1; b: 2}>;
+	leadingSpreadArray: [...Array<{a: 1}>, {b: 2}];
+	tailingSpreadArray: [{a: 1}, {b: {c: 2; other: 2}}, ...Array<{d: 3}>];
+	objectTuple: [{a: 1}];
+	number: number;
+	boolean: boolean;
+	date: Date;
+	Class: typeof ClassA;
+	instance: ClassA;
+	0: number;
+};
+
+type Testing = BaseType & {
+	object: BaseType;
+	optionalObject?: Partial<BaseType>;
+	optionalString?: string;
+	readonly readonlyObject: {a: 1};
+	1: BaseType;
+	2?: BaseType;
+};
+
+declare const normal: PickDeep<Testing, 'string'>;
+expectTypeOf(normal).toBe<{string: string}>();
+
+type DeepType = {
+	nested: {
+		deep: {
+			deeper: {
+				value: string;
+				value1: number;
+			};
+		};
+	};
+	foo: string;
+};
+type DepthType = {nested: {deep: {deeper: {value: string}}}};
+
+declare const deep: PickDeep<DeepType, 'nested.deep.deeper.value'>;
+expectTypeOf(deep).toBe<DepthType>();
+
+// Test interface
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface DeepInterface extends DeepType {
+	bar: {
+		number: number;
+		string: string;
+	};
+}
+declare const deepInterface: PickDeep<DeepInterface, 'nested.deep.deeper.value'>;
+expectTypeOf(deepInterface).toBe<DepthType>();
+declare const deepInterface2: PickDeep<DeepInterface, 'bar.number'>;
+expectTypeOf(deepInterface2).toBe<{bar: {number: number}}>();
+
+type GenericType<T> = {
+	genericKey: T;
+};
+declare const genericTest: PickDeep<GenericType<number>, 'genericKey'>;
+expectTypeOf(genericTest).toBe<{genericKey: number}>();
+
+declare const union: PickDeep<Testing, 'object.number' | 'object.string'>;
+expectTypeOf(union).toBe<{object: {number: number; string: string}}>();
+
+declare const optional: PickDeep<Testing, 'optionalObject.optionalString'>;
+expectTypeOf(optional).toBe<{optionalObject?: {optionalString?: string}}>();
+
+declare const optionalUnion: PickDeep<Testing, 'optionalObject.string' | 'object.number'>;
+expectTypeOf(optionalUnion).toBe<{optionalObject?: {string?: string}; object: {number: number}}>();
+
+declare const readonlyTest: PickDeep<Testing, 'readonlyObject.a'>;
+expectTypeOf(readonlyTest).toBe<{readonly readonlyObject: {a: 1}}>();
+
+declare const array: PickDeep<Testing, 'object.array'>;
+expectTypeOf(array).toBe<{object: {array: number[]}}>();
+
+declare const readonlyArray: PickDeep<Testing, 'object.readonlyArray'>;
+expectTypeOf(readonlyArray).toBe<{object: {readonlyArray: readonly number[]}}>();
+
+declare const tuple: PickDeep<Testing, 'object.tuples'>;
+expectTypeOf(tuple).toBe<{object: {tuples: ['foo', 'bar']}}>();
+
+declare const objectArray1: PickDeep<Testing, `object.objectArray.${number}`>;
+expectTypeOf(objectArray1).toBe<{object: {objectArray: Array<{a: 1; b: 2}>}}>();
+
+declare const objectArray2: PickDeep<Testing, `object.objectArray.${number}.a`>;
+expectTypeOf(objectArray2).toBe<{object: {objectArray: Array<{a: 1}>}}>();
+
+// Several paths under every element are merged into one element. https://github.com/sindresorhus/type-fest/issues/1223
+expectTypeOf<PickDeep<{arr: Array<{a: string; b: number; c: boolean}>}, `arr.${number}.${'b' | 'c'}`>>().toBe<{arr: Array<{b: number; c: boolean}>}>();
+
+declare const leadingSpreadArray1: PickDeep<Testing, `object.leadingSpreadArray.${number}.a`>;
+expectTypeOf(leadingSpreadArray1).toBe<{object: {leadingSpreadArray: [...Array<{a: 1}>]}}>();
+
+declare const leadingSpreadArray2: PickDeep<Testing, `object.leadingSpreadArray.${number}`>;
+expectTypeOf(leadingSpreadArray2).toBe<{object: {leadingSpreadArray: [...Array<{a: 1}>, {b: 2}]}}>();
+
+declare const tailingSpreadArray1: PickDeep<Testing, 'object.tailingSpreadArray.1'>;
+expectTypeOf(tailingSpreadArray1).toBe<{object: {tailingSpreadArray: [unknown, {b: {c: 2; other: 2}}]}}>();
+
+declare const tailingSpreadArray2: PickDeep<Testing, 'object.tailingSpreadArray.1.b.c'>;
+expectTypeOf(tailingSpreadArray2).toBe<{object: {tailingSpreadArray: [unknown, {b: {c: 2}}]}}>();
+
+declare const date: PickDeep<Testing, 'object.date'>;
+expectTypeOf(date).toBe<{object: {date: Date}}>();
+
+declare const instance: PickDeep<Testing, 'object.instance'>;
+expectTypeOf(instance).toBe<{object: {instance: ClassA}}>();
+
+declare const classTest: PickDeep<Testing, 'object.Class'>;
+expectTypeOf(classTest).toBe<{object: {Class: typeof ClassA}}>();
+
+declare const numberTest: PickDeep<Testing, '1'>;
+expectTypeOf(numberTest).toBe<{1: BaseType}>();
+
+declare const numberTest2: PickDeep<Testing, '1.0'>;
+expectTypeOf(numberTest2).toBe<{1: {0: number}}>();
+
+declare const numberTest3: PickDeep<Testing, '2.0'>;
+expectTypeOf(numberTest3).toBe<{2?: {0: number}}>();
+
+// A tuple with an optional element keeps its `?` modifier, so its length stays fixed.
+declare const optionalTupleElement: PickDeep<{a: [1, 2?]}, 'a.1'>;
+expectTypeOf(optionalTupleElement).toBe<{a: [unknown, 2?]}>();
+
+declare const optionalHeadPicked: PickDeep<{a: [1, 2?]}, 'a.0'>;
+expectTypeOf(optionalHeadPicked).toBe<{a: [1]}>();
+
+declare const readonlyOptionalTuple: PickDeep<{a: readonly [1, 2?]}, 'a.1'>;
+expectTypeOf(readonlyOptionalTuple).toBe<{a: readonly [unknown, 2?]}>();
+
+declare const requiredTupleUnchanged: PickDeep<{a: [1, 2, 3]}, 'a.1'>;
+expectTypeOf(requiredTupleUnchanged).toBe<{a: [unknown, 2]}>();
+
+// A picked element that was optional keeps its `?` modifier wherever it sits in the tuple.
+declare const optionalAtEnd: PickDeep<{a: [1, 2, 3?]}, 'a.2'>;
+expectTypeOf(optionalAtEnd).toBe<{a: [unknown, unknown, 3?]}>();
+
+declare const optionalTailHeadPicked: PickDeep<{a: [1, 2, 3?]}, 'a.0'>;
+expectTypeOf(optionalTailHeadPicked).toBe<{a: [1]}>();
+
+// A rest element is not optional, so picking it stays required.
+declare const restElement: PickDeep<{a: [1, ...string[]]}, 'a.0'>;
+expectTypeOf(restElement).toBe<{a: [1]}>();
+
+// A tuple that starts with a rest element always has its trailing elements, so an index within that minimum length stays required.
+declare const leadingRestElement: PickDeep<{a: [...string[], number]}, 'a.0'>;
+expectTypeOf(leadingRestElement).toBe<{a: [string | number]}>();
+
+declare const readonlyLeadingRestElement: PickDeep<{a: readonly [...string[], number]}, 'a.0'>;
+expectTypeOf(readonlyLeadingRestElement).toBe<{a: readonly [string | number]}>();
+
+declare const middleRestElement: PickDeep<{a: [1, ...string[], 2]}, 'a.1'>;
+expectTypeOf(middleRestElement).toBe<{a: [unknown, string | 2]}>();
+
+// An index past the minimum length may not exist, so it is optional.
+declare const leadingRestElementPastMinimum: PickDeep<{a: [...string[], number]}, 'a.1'>;
+expectTypeOf(leadingRestElementPastMinimum).toBe<{a: [unknown, (string | number)?]}>();
+
+// An element of a plain array may not exist, so it is optional.
+declare const plainArrayElement: PickDeep<{a: string[]}, 'a.0'>;
+expectTypeOf(plainArrayElement).toBe<{a: [string?]}>();
+
+// A required element is unaffected.
+declare const allRequired: PickDeep<{a: [1, 2, 3]}, 'a.2'>;
+expectTypeOf(allRequired).toBe<{a: [unknown, unknown, 3]}>();
+
+// Several indices of the same tuple are merged into one tuple, padded with `unknown` up to the last picked index, whatever the order of the paths.
+expectTypeOf<PickDeep<[1, 2, 3], '1' | '2'>>().toBe<[unknown, 2, 3]>();
+expectTypeOf<PickDeep<[1, 2, 3], '2' | '1'>>().toBe<[unknown, 2, 3]>();
+expectTypeOf<PickDeep<[1, 2, 3], '0' | '2'>>().toBe<[1, unknown, 3]>();
+expectTypeOf<PickDeep<readonly [1, 2, 3], '0' | '2'>>().toBe<readonly [1, unknown, 3]>();
+expectTypeOf<PickDeep<{a: [1, 2, 3]}, 'a.0' | 'a.2'>>().toBe<{a: [1, unknown, 3]}>();
+
+// Paths into different elements of the same tuple are merged too.
+expectTypeOf<PickDeep<{t: [{x?: 1; y: 2}, {z?: 1; w: 2}]}, 't.0.x' | 't.1.z'>>().toBe<{t: [{x?: 1}, {z?: 1}]}>();
+expectTypeOf<PickDeep<[[1, 2], 3], '0.1' | '1'>>().toBe<[[unknown, 2], 3]>();
+expectTypeOf<PickDeep<[{a: 1; b: 2; c: 3}], '0.a' | '0.b'>>().toBe<[{a: 1; b: 2}]>();
+
+// Picking a whole element and a path inside it gives the whole element.
+expectTypeOf<PickDeep<[{a: 1; b: 2}, 3], '0' | '0.a' | '1'>>().toBe<[{a: 1; b: 2}, 3]>();
+
+// A picked optional element keeps its `?` when nothing required follows it. Otherwise, it gains `| undefined`, like `SetOptional`.
+expectTypeOf<PickDeep<{t: [string?, number?]}, 't.0' | 't.1'>>().toBe<{t: [string?, number?]}>();
+expectTypeOf<PickDeep<{t: [{a?: 1}, {b?: 1}?]}, 't.0.a' | 't.1' | 't.1.b'>>().toBe<{t: [{a?: 1}, {b?: 1}?]}>();
+expectTypeOf<PickDeep<[1?, 2?, 3?], '0' | '2'>>().toBe<[1 | undefined, unknown, 3?]>();
+
+// A single large index is padded in one step, so it does not hit the recursion limit.
+type LargeIndexPick = PickDeep<Array<{x: 1; y: 2}>, '999'>;
+expectTypeOf<LargeIndexPick['length']>().toBe<999 | 1000>();
+expectTypeOf<LargeIndexPick[999]>().toBe<{x: 1; y: 2} | undefined>();
+expectTypeOf<PickDeep<Array<{x: 1; y: 2}>, '999.x'>[999]>().toBe<{x: 1}>();
+
+// Picking the containing property still works.
+declare const pickContainer: PickDeep<{a: [1, 2, 3]}, 'a'>;
+expectTypeOf(pickContainer).toBe<{a: [1, 2, 3]}>();
+
+// A literal path through an index signature picks that key, like `Pick<Record<string, X>, 'x'>` gives `{x: X}`.
+declare const throughStringIndexSignature: PickDeep<{a: Record<string, {b: 1; c: 2}>}, 'a.x.b'>;
+expectTypeOf(throughStringIndexSignature).toBe<{a: {x: {b: 1}}}>();
+
+declare const throughNumberIndexSignature: PickDeep<{a: Record<number, {b: 1; c: 2}>}, 'a.7.b'>;
+expectTypeOf(throughNumberIndexSignature).toBe<{a: {7: {b: 1}}}>();
+
+// The same for the object-literal spelling of a signature.
+declare const throughStringIndexSignatureLiteral: PickDeep<{a: {[k: string]: {b: 1; c: 2}}}, 'a.x.b'>;
+expectTypeOf(throughStringIndexSignatureLiteral).toBe<{a: {x: {b: 1}}}>();
+
+declare const throughNumberIndexSignatureLiteral: PickDeep<{a: {[k: number]: {b: 1; c: 2}}}, 'a.7.b'>;
+expectTypeOf(throughNumberIndexSignatureLiteral).toBe<{a: {7: {b: 1}}}>();
+
+// A subject that also names the key outright keeps the member, because the member is what the key reads.
+declare const mixedSignatureAndMember: PickDeep<{[k: string]: {b: number; c: number}; a: {b: 9; c: 8}}, 'a.b'>;
+expectTypeOf(mixedSignatureAndMember).toBe<{a: {b: 9}}>();
+
+// A member that can be `null` or `undefined` when the value is read keeps them, because reading the picked path from `{a: null}` throws at runtime exactly as it does for the source. An optional member keeps its `?`, which already covers absence.
+declare const nullableIntermediate: PickDeep<{a: {b: string} | null}, 'a.b'>;
+expectTypeOf(nullableIntermediate).toBe<{a: {b: string} | null}>();
+
+declare const undefinedIntermediate: PickDeep<{a: {b: string} | undefined}, 'a.b'>;
+expectTypeOf(undefinedIntermediate).toBe<{a: {b: string} | undefined}>();
+
+declare const optionalNullableIntermediate: PickDeep<{a?: {b: string} | null}, 'a.b'>;
+expectTypeOf(optionalNullableIntermediate).toBe<{a?: {b: string} | null}>();
+
+// Explicit `undefined` remains assignable with `exactOptionalPropertyTypes`, while implicit absence only keeps the `?` modifier.
+declare const optionalUndefinedIntermediate: PickDeep<{a?: {b: string; other: number} | undefined}, 'a.b'>;
+expectTypeOf(optionalUndefinedIntermediate).toBe<{a?: {b: string} | undefined}>();
+
+declare const nestedOptionalUndefinedIntermediate: PickDeep<{a?: {b?: {c: string; other: number} | undefined} | null | undefined}, 'a.b.c'>;
+expectTypeOf(nestedOptionalUndefinedIntermediate).toBe<{a?: {b?: {c: string} | undefined} | null | undefined}>();
+
+// A nullable member is kept next to a sibling path. https://github.com/sindresorhus/type-fest/issues/880
+expectTypeOf<PickDeep<{name: string; age: number; owner: {name: string; age: number} | null}, 'name' | 'owner.name'>>().toBe<{name: string; owner: {name: string} | null}>();
+
+// Every object member that has the key is picked, next to the kept `null`.
+expectTypeOf<PickDeep<{owner: {name: 'name1'} | {name: 'name2'; foo: ''} | null}, 'owner.name'>>().toBe<{owner: {name: 'name1'} | {name: 'name2'} | null}>();
+
+// Any other member that the path cannot go into is kept the same way, while an object member without the key is dropped. https://github.com/sindresorhus/type-fest/issues/1224
+expectTypeOf<PickDeep<{a: string | {b: number; c: boolean; d: 1} | null | undefined}, `a.${'b' | 'c'}`>>().toBe<{a: string | {b: number; c: boolean} | null | undefined}>();
+expectTypeOf<PickDeep<{a?: Date | {b: 1; c: 2} | {d: 3}}, 'a.b'>>().toBe<{a?: Date | {b: 1}}>();
+expectTypeOf<PickDeep<{a: Record<string, string | {b: 1; c: 2}>}, 'a.x.b'>>().toBe<{a: {x: string | {b: 1}}}>();
+expectTypeOf<PickDeep<{a: any}, 'a.b'>>().toBe<{a: any}>();
+expectTypeOf<PickDeep<{a: unknown}, 'a.b'>>().toBe<never>();
+expectTypeOf<PickDeep<{a: 'x' | 1 | boolean | (() => void) | {b: 1; c: 2}}, 'a.b'>>().toBe<{a: 'x' | 1 | boolean | (() => void) | {b: 1}}>();
+expectTypeOf<PickDeep<{a?: string | {b: 1; c: 2} | undefined}, 'a.b'>>().toBe<{a?: string | {b: 1} | undefined}>();
+expectTypeOf<PickDeep<{readonly a: string | {b: 1; c: 2}}, 'a.b'>>().toBe<{readonly a: string | {b: 1}}>();
+expectTypeOf<PickDeep<{0: string | {b: 1; c: 2}}, '0.b'>>().toBe<{0: string | {b: 1}}>();
+expectTypeOf<PickDeep<{a: {b: number | {c: 1; d: 2}; e: 1}}, 'a.b.c'>>().toBe<{a: {b: number | {c: 1}}}>();
+expectTypeOf<PickDeep<{a: string | Array<{b: 1; c: 2}>}, `a.${number}.b`>>().toBe<{a: string | Array<{b: 1}>}>();
+expectTypeOf<PickDeep<{a: string | {b: 1}} | {a: number | {b: 2; c: 3}}, 'a.b'>>().toBe<{a: string | {b: 1}} | {a: number | {b: 2}}>();
+
+// Picking the whole member and a path inside it gives the whole member.
+expectTypeOf<PickDeep<{a: string | {b: 1; c: 2}}, 'a' | 'a.b'>>().toBe<{a: string | {b: 1; c: 2}}>();
+
+// A kept member does not make a missing path exist.
+expectTypeOf<PickDeep<{a: string | {b: 1}}, 'a.c'>>().toBe<never>();
+
+// The documented tuple traversal limitation remains separate from optional object properties.
+declare const nullableTupleTraversal: PickDeep<[({a: string; other: number} | null | undefined)?], '0.a'>;
+expectTypeOf(nullableTupleTraversal).toBe<[{a: string}]>();
+
+// The same limitation applies to the elements of an array.
+expectTypeOf<PickDeep<{a: Array<string | null | {b: 1; c: 2}>}, `a.${number}.b`>>().toBe<{a: Array<{b: 1}>}>();
+
+// A required element whose type includes `undefined` stays required.
+declare const requiredUndefinedElement: PickDeep<{a: [1, 2 | undefined]}, 'a.1'>;
+expectTypeOf(requiredUndefinedElement).toBe<{a: [unknown, 2 | undefined]}>();
+
+// Two literal paths through the same signature pick two keys, and a non-literal path keeps the signature.
+declare const twoKeysThroughSignature: PickDeep<{a: Record<string, {b: 1; c: 2}>}, 'a.x.b' | 'a.y.c'>;
+expectTypeOf(twoKeysThroughSignature).toBe<{a: {x: {b: 1}; y: {c: 2}}}>();
+
+declare const patternThroughSignature: PickDeep<{a: Record<string, {b: 1; c: 2}>}, `a.${string}.b`>;
+expectTypeOf(patternThroughSignature).toBe<{a: {[x: string]: {b: 1}}}>();
+
+// A present key can have the value `never`; it is different from a missing path.
+expectTypeOf<PickDeep<{value: never; other: string}, 'value'>>().toBe<{value: never}>();
+expectTypeOf<PickDeep<{nested: {value: never; other: string}}, 'nested.value'>>().toBe<{nested: {value: never}}>();
+
+expectTypeOf<PickDeep<{readonly value: never; other: string}, 'value'>>().toBe<{readonly value: never}>();
+expectTypeOf<PickDeep<{nested?: {readonly value: never; other: string}}, 'nested.value'>>().toBe<{nested?: {readonly value: never}}>();
+expectTypeOf<PickDeep<{nested: {value: never; other: string} | null}, 'nested.value'>>().toBe<{nested: {value: never} | null}>();
+expectTypeOf<PickDeep<{nested: {value: never; other: string} | undefined}, 'nested.value'>>().toBe<{nested: {value: never} | undefined}>();
+
+// Picking alongside other properties must keep the impossible property's constraint.
+expectTypeOf<PickDeep<{value: never; other: string; ignored: number}, 'value' | 'other'>>().toBe<{value: never; other: string}>();
+expectTypeOf<PickDeep<{nested: {value: never; other: string; ignored: number}}, 'nested.value' | 'nested.other'>>().toBe<{nested: {value: never; other: string}}>();
+
+// Numeric keys and signatures can also contain `never` values.
+expectTypeOf<PickDeep<{0: never; other: string}, 0>>().toBe<{0: never}>();
+expectTypeOf<PickDeep<{0: never; other: string}, '0'>>().toBe<{0: never}>();
+expectTypeOf<PickDeep<Record<string, never>, 'value'>>().toBe<{value: never}>();
+expectTypeOf<PickDeep<Record<number, never>, '7'>>().toBe<{7: never}>();
+
+// A missing key in a different union member is still excluded.
+expectTypeOf<PickDeep<{value: never; first: string} | {other: number}, 'value'>>().toBe<{value: never}>();
+expectTypeOf<PickDeep<{value: never; first: string} | {value: number; second: string}, 'value'>>().toBe<{value: never} | {value: number}>();
+
+// A path deeper than `Paths` lists by default is accepted. https://github.com/sindresorhus/type-fest/issues/1502
+type Leaf = {
+	bar?: 'LeafBar';
+	foo: 'LeafString';
+};
+
+type Tree = {
+	foo?: Array<{
+		mode: 'test1';
+		bar: Array<{foo: Leaf[] | Leaf}>;
+	} | {
+		mode: 'test2';
+		foo: 'foo.number.foo';
+		bar: Array<{foo: Leaf[] | Leaf}>;
+	}>;
+};
+
+expectTypeOf<Get<PickDeep<Tree, `foo.${number}.bar.${number}.foo.${number}.bar`>, `foo.${number}.bar.${number}.foo.${number}.bar`>>().toBe<'LeafBar' | undefined>();
+
+// A missing path is ignored, and if no path exists, the result is `never`.
+type ValidObject = {
+	fooRoot: Array<{bar: 0}>;
+	barRoot: {foo: 1};
+};
+
+expectTypeOf<PickDeep<ValidObject, 'barRoot.foo' | 'barRoot.invalidPath'>>().toBe<{barRoot: {foo: 1}}>();
+expectTypeOf<PickDeep<ValidObject, 'invalidPath'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidObject, 'barRoot.invalidPath'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidObject, `barRoot.${number}`>>().toBe<never>();
+expectTypeOf<PickDeep<ValidObject, `barRoot.foo.${number}`>>().toBe<never>();
+expectTypeOf<PickDeep<ValidObject, `fooRoot.${number}.bar.invalidPath`>>().toBe<never>();
+expectTypeOf<PickDeep<ValidObject, `fooRoot.${number}.invalidPath`>>().toBe<never>();
+expectTypeOf<PickDeep<ValidObject, `fooRoot.${number}..bar`>>().toBe<never>();
+expectTypeOf<PickDeep<ValidObject, `invalidPath.fooRoot.${number}.bar`>>().toBe<never>();
+expectTypeOf<PickDeep<ValidObject, string>>().toBe<never>();
+expectTypeOf<PickDeep<{a: null}, 'a.b'>>().toBe<never>();
+expectTypeOf<PickDeep<{a: string}, 'a.b'>>().toBe<never>();
+
+type ValidArray = Array<{foo: 0; bar: 1}>;
+expectTypeOf<PickDeep<ValidArray, `${number}.invalidPath`>>().toBe<never>();
+expectTypeOf<PickDeep<ValidArray, `${number}.foo.${number}`>>().toBe<never>();
+expectTypeOf<PickDeep<ValidArray, `${number}..foo`>>().toBe<never>();
+expectTypeOf<PickDeep<ReadonlyArray<ValidArray[number]>, `${number}.invalidPath`>>().toBe<never>();
+
+type ValidTuple = [{foo: 0; bar: 1}, {foo: 2; bar: 3}];
+expectTypeOf<PickDeep<ValidTuple, '0.invalidPath'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidTuple, '1.foo.invalidPath'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidTuple, '2.foo'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidTuple, 'invalidPath.foo'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidTuple, '0..foo'>>().toBe<never>();
+expectTypeOf<PickDeep<Readonly<ValidTuple>, '0.invalidPath'>>().toBe<never>();
+expectTypeOf<PickDeep<Readonly<ValidTuple>, '2.foo'>>().toBe<never>();
+
+// An index that the array cannot have is a missing path.
+expectTypeOf<PickDeep<ValidTuple, '2'>>().toBe<never>();
+expectTypeOf<PickDeep<{a: ValidTuple}, 'a.2'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidTuple, '-1'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidTuple, '-1.foo'>>().toBe<never>();
+expectTypeOf<PickDeep<ValidArray, '-1'>>().toBe<never>();
+expectTypeOf<PickDeep<Readonly<ValidTuple>, '2'>>().toBe<never>();
+expectTypeOf<PickDeep<[1, 2], '1' | '5'>>().toBe<[unknown, 2]>();
+expectTypeOf<PickDeep<{a: [1, 2]}, 'a.1' | 'a.5'>>().toBe<{a: [unknown, 2]}>();
+
+// An index that the array can have is unchanged, including an optional element and any index of an array of unknown length.
+expectTypeOf<PickDeep<[1, 2?], '1'>>().toBe<[unknown, 2?]>();
+expectTypeOf<PickDeep<[1, ...string[]], '5'>>().toBe<[unknown, unknown, unknown, unknown, unknown, string?]>();
+expectTypeOf<PickDeep<ValidArray, '5.foo'>>().toBe<[unknown, unknown, unknown, unknown, unknown, {foo: 0}]>();
+
+// A valid path through an array or tuple is unchanged.
+expectTypeOf<PickDeep<ValidTuple, '1.foo'>>().toBe<[unknown, {foo: 2}]>();
+expectTypeOf<PickDeep<ValidArray, `${number}.foo`>>().toBe<Array<{foo: 0}>>();
+
+// Boundary types
+expectTypeOf<PickDeep<ValidObject, never>>().toBe<never>();
+expectTypeOf<PickDeep<unknown, 'a'>>().toBe<never>();
+expectTypeOf<PickDeep<never, 'a'>>().toBe<never>();
+
+// `OptionalPaths` can give several paths into one tuple. (https://github.com/sindresorhus/type-fest/pull/1443)
+type WithOptionalTuple = {t: [{a?: 1; b: 2}, {c?: 3}?]};
+expectTypeOf<PickDeep<WithOptionalTuple, OptionalPaths<WithOptionalTuple>>>().toBe<{t: [{a?: 1}, {c?: 3}?]}>();
+
+// `Paths<T>` is a valid path for a generic `T`, even though autocomplete only lists paths up to `a.b.c`.
+type PickDeepAllPaths<T> = PickDeep<T, Paths<T>>;
+expectTypeOf<PickDeepAllPaths<{a: {b: 1}}>>().toBe<{a: {b: 1}}>();
+
+// A number path reads the same key or index as its string form, also for a generic `Index`. A number that is not a path is ignored, like a string that is not a path.
+type PickDeepIndex<T, Index extends number> = PickDeep<T, Index>;
+expectTypeOf<PickDeepIndex<[1, 2], 1>>().toBe<[unknown, 2]>();
+expectTypeOf<PickDeep<{a: 1}, 5>>().toBe<never>();
+expectTypeOf<PickDeep<[1, 2], -1 | 1.5>>().toBe<never>();
+expectTypeOf<PickDeep<[1, 2], '0' | 1>>().toBe<[1, 2]>();
+expectTypeOf<PickDeep<[1] | {a: 1; 0: 2}, 0>>().toBe<[1] | {0: 2}>();
+
+// Autocomplete only lists paths up to `a.b.c`, so a type with very many deeper paths does not make the union of paths too complex to represent.
+type Level<Value> = Record<DigitCharacter, Value>;
+type ManyPaths = Level<Level<Level<Level<Level<Level<1>>>>>>;
+expectTypeOf<PickDeep<ManyPaths, '0.0.0.0.0.0'>>().toBe<{0: {0: {0: {0: {0: {0: 1}}}}}}>();
+
+// Numeric paths keep the modifiers of properties declared with string keys.
+expectTypeOf<PickDeep<{readonly '0'?: string; other: number}, 0>>().toBe<{readonly '0'?: string}>();
+expectTypeOf<PickDeep<{'0'?: string; other: number}, 0>>().toBe<{'0'?: string}>();
+expectTypeOf<PickDeep<{readonly '0': string; other: number}, 0>>().toBe<{readonly '0': string}>();
+expectTypeOf<PickDeep<{readonly '1.5'?: string; other: number}, 1.5>>().toBe<{readonly '1.5'?: string}>();
+expectTypeOf<PickDeep<{readonly '-1'?: string; other: number}, -1>>().toBe<{readonly '-1'?: string}>();
+expectTypeOf<PickDeep<{readonly '0'?: string | undefined; other: number}, 0>>().toBe<{readonly '0'?: string | undefined}>();
+expectTypeOf<PickDeep<{readonly '0'?: never; other: number}, 0>>().toBe<{readonly '0'?: never}>();
+expectTypeOf<PickDeep<{readonly '0'?: unknown; other: number}, 0>>().toBe<{readonly '0'?: unknown}>();
+expectTypeOf<PickDeep<{readonly '0'?: any; other: number}, 0>>().toBe<{readonly '0'?: any}>();
+expectTypeOf<PickDeep<{readonly 0?: string; other: number}, '0'>>().toBe<{readonly 0?: string}>();
+expectTypeOf<PickDeep<{'0'?: string; first: true} | {readonly '0': number; second: true}, 0>>().toBe<{'0'?: string} | {readonly '0': number}>();
+
+// Parse the string value of a branded path before grouping its segments.
+expectTypeOf<PickDeep<{user: {name: string; age: number}}, Tagged<'user.name', 'Path'>>>().toBe<{user: {name: string}}>();
+
+expectTypeOf<PickDeep<{user: {name: string; age: number}}, Opaque<'user.name', 'Path'>>>().toBe<{user: {name: string}}>();
+expectTypeOf<PickDeep<{user: {name: string; age: number}}, Tagged<Tagged<'user.name', 'Path'>, 'Validated'>>>().toBe<{user: {name: string}}>();
+expectTypeOf<PickDeep<{user: {name: string; age: number}}, 'user.name' & {readonly __brand: unique symbol}>>().toBe<{user: {name: string}}>();
+expectTypeOf<PickDeep<{readonly user?: {readonly name?: string; age: number}}, Tagged<'user.name', 'Path'>>>().toBe<{readonly user?: {readonly name?: string}}>();
+expectTypeOf<PickDeep<{user: {name: string; age: number}}, Tagged<'user.name' | 'user.age', 'Path'>>>().toBe<{user: {name: string; age: number}}>();
+expectTypeOf<PickDeep<{user: {name: string; age: number}}, Tagged<'user.name', 'Path'> | 'user.age'>>().toBe<{user: {name: string; age: number}}>();
+expectTypeOf<PickDeep<{user: {name: string; age: number}} | {user: {name: number; error: true}}, Tagged<'user.name', 'Path'>>>().toBe<{user: {name: string}} | {user: {name: number}}>();
+expectTypeOf<PickDeep<readonly [1, 2], Tagged<1, 'Index'>>>().toBe<readonly [unknown, 2]>();
+expectTypeOf<PickDeep<{users: [{name: string; age: number}]}, Tagged<'users.0.name', 'Path'>>>().toBe<{users: [{name: string}]}>();
+expectTypeOf<PickDeep<{readonly '1.5'?: string; other: number}, Tagged<1.5, 'Key'>>>().toBe<{readonly '1.5'?: string}>();
+expectTypeOf<PickDeep<{value: Tagged<string, 'Value'>; other: number}, Tagged<'value', 'Path'>>>().toBe<{value: Tagged<string, 'Value'>}>();
+expectTypeOf<PickDeep<{value: any; other: number}, Tagged<'value', 'Path'>>>().toBe<{value: any}>();
+expectTypeOf<PickDeep<{value: never; other: number}, Tagged<'value', 'Path'>>>().toBe<{value: never}>();
+expectTypeOf<PickDeep<{value: unknown; other: number}, Tagged<'value', 'Path'>>>().toBe<{value: unknown}>();
+expectTypeOf<PickDeep<{value: string}, Tagged<'missing', 'Path'>>>().toBe<never>();
+expectTypeOf<PickDeep<{value: string}, Tagged<string, 'Path'>>>().toBe<never>();
+expectTypeOf<PickDeep<never, Tagged<'value', 'Path'>>>().toBe<never>();
+expectTypeOf<PickDeep<unknown, Tagged<'value', 'Path'>>>().toBe<never>();
+
+// Empty intersections preserve the known alternatives of a `LiteralUnion` path.
+expectTypeOf<PickDeep<{a: {b: string | null; c?: number}; d?: string}, LiteralUnion<'a.b', string>>>().toBe<{a: {b: string | null; c?: number}}>();
+expectTypeOf<PickDeep<{0?: string; 1: number | null}, LiteralUnion<0, number>>>().toBe<{0?: string}>();
+
+// A string enum key names the same runtime property as its literal spelling.
+enum EnumPickField {
+	Profile = 'profile',
+	Name = 'name',
+}
+
+type EnumPickRecord = {[EnumPickField.Profile]: {[EnumPickField.Name]: string; age: number}};
+expectTypeOf<PickDeep<EnumPickRecord, 'profile.name'>>().toBe<{[EnumPickField.Profile]: {[EnumPickField.Name]: string}}>();
+expectTypeOf<PickDeep<EnumPickRecord, 'profile'>>().toBe<EnumPickRecord>();
+
+type OptionalEnumPickRecord = {readonly [EnumPickField.Profile]?: {readonly [EnumPickField.Name]?: string; age: number} | null | undefined};
+expectTypeOf<PickDeep<OptionalEnumPickRecord, 'profile.name'>>().toBe<{readonly [EnumPickField.Profile]?: {readonly [EnumPickField.Name]?: string} | null | undefined}>();
+
+expectTypeOf<keyof PickDeep<EnumPickRecord, 'profile.name'>>().toBe<EnumPickField.Profile>();
+expectTypeOf<PickDeep<EnumPickRecord, 'profile.name' | 'profile.age'>>().toBe<EnumPickRecord>();
+expectTypeOf<PickDeep<EnumPickRecord, 'profile' | 'profile.name'>>().toBe<EnumPickRecord>();
+expectTypeOf<PickDeep<EnumPickRecord, EnumPickField.Profile>>().toBe<EnumPickRecord>();
+expectTypeOf<PickDeep<EnumPickRecord, `${EnumPickField.Profile}.${EnumPickField.Name}`>>().toBe<{[EnumPickField.Profile]: {[EnumPickField.Name]: string}}>();
+expectTypeOf<PickDeep<EnumPickRecord[], '0.profile.name'>>().toBe<[{[EnumPickField.Profile]: {[EnumPickField.Name]: string}}]>();
+expectTypeOf<PickDeep<EnumPickRecord | {other: boolean}, 'profile.name'>>().toBe<{[EnumPickField.Profile]: {[EnumPickField.Name]: string}}>();
+expectTypeOf<PickDeep<EnumPickRecord, 'profile.missing'>>().toBe<never>();
+expectTypeOf<PickDeep<EnumPickRecord, string>>().toBe<never>();
+expectTypeOf<PickDeep<EnumPickRecord, never>>().toBe<never>();
+
+declare const optionalEnumPick: PickDeep<OptionalEnumPickRecord, 'profile.name'>;
+if (optionalEnumPick.profile) {
+	// @ts-expect-error The selected nested field also remains readonly.
+	optionalEnumPick.profile.name = 'changed';
+}
+
+// @ts-expect-error The parent remains readonly even when the assigned value is valid.
+optionalEnumPick.profile = null;
+
+type IndexedEnumPickRecord = {[key: string]: unknown; readonly [EnumPickField.Profile]?: {name: string; age: number}};
+expectTypeOf<PickDeep<IndexedEnumPickRecord, 'profile.name'>>().toBe<{readonly [EnumPickField.Profile]?: {name: string}}>();
+type BrandedEnumPickRecord = {[EnumPickField.Profile]: {[EnumPickField.Name]: Tagged<string, 'Value'>}};
+expectTypeOf<PickDeep<BrandedEnumPickRecord, Tagged<'profile.name', 'Path'>>>().toBe<BrandedEnumPickRecord>();
+
+enum NumericPickField {
+	Zero,
+}
+
+expectTypeOf<PickDeep<{readonly [NumericPickField.Zero]?: {name: string; other: number}}, '0.name'>>().toBe<{readonly [NumericPickField.Zero]?: {name: string}}>();
+expectTypeOf<PickDeep<{[EnumPickField.Name]: never}, 'name'>>().toBe<{[EnumPickField.Name]: never}>();
+expectTypeOf<PickDeep<{[EnumPickField.Name]: any}, 'name'>>().toBe<{[EnumPickField.Name]: any}>();
+expectTypeOf<PickDeep<{[EnumPickField.Name]: unknown}, 'name'>>().toBe<{[EnumPickField.Name]: unknown}>();
+
+declare function pickEnumFields<Base, const Path extends string>(value: Base, path: Path): PickDeep<Base, Path>;
+const inferredEnumPick = pickEnumFields({[EnumPickField.Profile]: {[EnumPickField.Name]: 'Ada' as const, age: 37}}, 'profile.name');
+expectTypeOf(inferredEnumPick.profile.name).toBe<'Ada'>();
+// @ts-expect-error The inferred selection excludes the sibling field.
+expectTypeOf(inferredEnumPick.profile.age).toBe<number>();
+
+function enumPickName<Extra>(value: PickDeep<{[EnumPickField.Profile]: {[EnumPickField.Name]: string; extra: Extra}}, 'profile.name'>): string {
+	return value.profile.name;
+}
+
+// A broad numeric path keeps the index signature even when a named numeric enum key is more specific.
+type IndexedNumericEnumPick = {[key: number]: {name: string}; [NumericPickField.Zero]: {name: string; special: true}};
+expectTypeOf<PickDeep<IndexedNumericEnumPick, number>>().toBe<{[key: number]: {name: string}}>();
+expectTypeOf<PickDeep<IndexedNumericEnumPick, `${number}.name`>>().toBe<{[key: number]: {name: string}}>();
+
+// A numeric-looking missing path must not select every array element.
+type NoncanonicalIndexUsers = Array<{name: string; secret: string}>;
+expectTypeOf<PickDeep<NoncanonicalIndexUsers, '01'>>().toBe<never>();
+expectTypeOf<PickDeep<NoncanonicalIndexUsers, '01.name'>>().toBe<never>();
+expectTypeOf<PickDeep<readonly [{name: string}, {name: number}], '1e0.name'>>().toBe<never>();
+expectTypeOf<PickDeep<{users: NoncanonicalIndexUsers}, 'users.0x0.name'>>().toBe<never>();
+
+declare function pickWithPath<Base, const Path extends string>(value: Base, path: Path): PickDeep<Base, Path>;
+declare const noncanonicalIndexUsers: NoncanonicalIndexUsers;
+expectTypeOf(pickWithPath(noncanonicalIndexUsers, '01.name')).toBe<never>();
+
+// Numeric-looking object keys remain ordinary named properties.
+expectTypeOf<PickDeep<{'01': {name: string; secret: string}}, '01.name'>>().toBe<{'01': {name: string}}>();
+expectTypeOf<PickDeep<{'0x0': {name: number}}, '0x0'>>().toBe<{'0x0': {name: number}}>();
+expectTypeOf<PickDeep<NoncanonicalIndexUsers, '00.name' | '0.name'>>().toBe<[{name: string}]>();
+expectTypeOf<PickDeep<readonly [{name: string}], '01' | '0.name'>>().toBe<readonly [{name: string}]>();
+expectTypeOf<PickDeep<{users: NoncanonicalIndexUsers; safe: number}, 'users.01.name' | 'safe'>>().toBe<{safe: number}>();
+expectTypeOf<PickDeep<NoncanonicalIndexUsers, '-0.name'>>().toBe<never>();
+expectTypeOf<PickDeep<NoncanonicalIndexUsers, '+0'>>().toBe<never>();
+expectTypeOf<PickDeep<NoncanonicalIndexUsers, ' 0.name'>>().toBe<never>();
+expectTypeOf<PickDeep<ReadonlyArray<{name: string}>, '0b0.name'>>().toBe<never>();
+expectTypeOf<PickDeep<[{name: string}, ...Array<{name: string}>], '01.name'>>().toBe<never>();
+expectTypeOf<PickDeep<NoncanonicalIndexUsers, `${number}.name`>>().toBe<Array<{name: string}>>();
+
+const inferredCanonicalIndexPick = pickWithPath(noncanonicalIndexUsers, '0.name');
+expectTypeOf(inferredCanonicalIndexPick).toBe<[{name: string}]>();
+// @ts-expect-error A canonical path selects only the requested field.
+expectTypeOf(inferredCanonicalIndexPick[0].secret).toBe<string>();
+
+function _constructGenericArrayPick<Extra>(value: Array<{name: string}>): PickDeep<Array<{name: string; extra: Extra}>, `${number}.name`> {
+	return value;
+}
+
+// A nonexistent numeric property must not select the entire numeric index signature.
+expectTypeOf<PickDeep<Record<number, {name: string}>, '00.name'>>().toBe<never>();
+
+// Literal and nonliteral path heads must keep their independently selected fields.
+type MixedHeadObjectPick = PickDeep<Record<string, {name: string; id: number}>, `${string}.name` | 'foo.id'>;
+declare const mixedHeadObjectPick: MixedHeadObjectPick;
+expectTypeOf(mixedHeadObjectPick.foo.id).toBe<number>();
+expectTypeOf(mixedHeadObjectPick['other']?.name).toBe<string | undefined>();
+expectTypeOf({foo: {name: 'Ada', id: 1}}).toBeAssignableTo<MixedHeadObjectPick>();
+expectTypeOf({}).not.toBeAssignableTo<MixedHeadObjectPick>();
+expectTypeOf({foo: {name: 'Ada', id: 'wrong'}}).not.toBeAssignableTo<MixedHeadObjectPick>();
+
+type MixedHeadArrayPick = PickDeep<Array<{name: string; id: number}>, `${number}.name` | '0.id'>;
+declare const mixedHeadArrayPick: MixedHeadArrayPick;
+expectTypeOf(mixedHeadArrayPick[0].id).toBe<number>();
+expectTypeOf(mixedHeadArrayPick[1]?.name).toBe<string | undefined>();
+expectTypeOf<[{name: string; id: number}]>().toBeAssignableTo<MixedHeadArrayPick>();
+expectTypeOf<[]>().not.toBeAssignableTo<MixedHeadArrayPick>();
+expectTypeOf<[{name: string}]>().not.toBeAssignableTo<MixedHeadArrayPick>();
+expectTypeOf<[{name: string; id: string}]>().not.toBeAssignableTo<MixedHeadArrayPick>();
+
+// Ignoring a differently spelled numeric path must not erase another valid selection.
+expectTypeOf<PickDeep<Record<number, {name: string; id: number}>, '00.name' | '0.id'>>().toBe<{0: {id: number}}>();
+expectTypeOf<PickDeep<Record<number, {name: string}> & {'00': {name: number}}, '00.name'>>().toBe<{'00': {name: number}}>();

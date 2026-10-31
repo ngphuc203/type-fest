@@ -1,0 +1,183 @@
+import {expectTypeOf} from 'nz';
+import type {Opaque, Tagged, Sum} from '../index.d.ts';
+import type {NegativeInfinity, PositiveInfinity} from '../source/numeric.d.ts';
+
+// Positive result
+expectTypeOf<Sum<-999, 999>>().toBe<0>();
+expectTypeOf<Sum<999, -999>>().toBe<0>();
+expectTypeOf<Sum<0, 0>>().toBe<0>();
+expectTypeOf<Sum<2, -2>>().toBe<0>();
+expectTypeOf<Sum<-2, 2>>().toBe<0>();
+expectTypeOf<Sum<1, 2>>().toBe<3>();
+expectTypeOf<Sum<10, -2>>().toBe<8>();
+expectTypeOf<Sum<-2, 10>>().toBe<8>();
+expectTypeOf<Sum<-20, 77>>().toBe<57>();
+expectTypeOf<Sum<-1, 999>>().toBe<998>();
+expectTypeOf<Sum<999, 1>>().toBe<1000>();
+expectTypeOf<Sum<999, 999>>().toBe<1998>();
+
+// Negative result
+expectTypeOf<Sum<-1, -2>>().toBe<-3>();
+expectTypeOf<Sum<-10, 2>>().toBe<-8>();
+expectTypeOf<Sum<2, -10>>().toBe<-8>();
+expectTypeOf<Sum<20, -77>>().toBe<-57>();
+expectTypeOf<Sum<-999, 1>>().toBe<-998>();
+expectTypeOf<Sum<1, -999>>().toBe<-998>();
+expectTypeOf<Sum<-999, -999>>().toBe<-1998>();
+
+// Infinity
+expectTypeOf<Sum<PositiveInfinity, -999>>().toBe<PositiveInfinity>();
+expectTypeOf<Sum<-999, PositiveInfinity>>().toBe<PositiveInfinity>();
+expectTypeOf<Sum<PositiveInfinity, PositiveInfinity>>().toBe<PositiveInfinity>();
+expectTypeOf<Sum<NegativeInfinity, 999>>().toBe<NegativeInfinity>();
+expectTypeOf<Sum<999, NegativeInfinity>>().toBe<NegativeInfinity>();
+expectTypeOf<Sum<NegativeInfinity, NegativeInfinity>>().toBe<NegativeInfinity>();
+
+// Number
+expectTypeOf<Sum<number, 1>>().toBe<number>();
+expectTypeOf<Sum<1, number>>().toBe<number>();
+expectTypeOf<Sum<number, number>>().toBe<number>();
+expectTypeOf<Sum<number, PositiveInfinity>>().toBe<number>();
+expectTypeOf<Sum<NegativeInfinity, number>>().toBe<number>();
+expectTypeOf<Sum<NegativeInfinity, PositiveInfinity>>().toBe<number>();
+expectTypeOf<Sum<PositiveInfinity, NegativeInfinity>>().toBe<number>();
+
+// Union
+expectTypeOf<Sum<1, 2 | 3>>().toBe<3 | 4>();
+expectTypeOf<Sum<1 | 2, 3>>().toBe<4 | 5>();
+expectTypeOf<Sum<1 | 2 | 3, 4 | 5>>().toBe<5 | 6 | 7 | 8>();
+expectTypeOf<Sum<1 | -2 | 3, 4 | -5 | 6>>().toBe<2 | 4 | 5 | 7 | 9 | -2 | -4 | -7>();
+
+// Large numbers
+expectTypeOf<Sum<1111, 2222>>().toBe<3333>();
+expectTypeOf<Sum<-5000, 2000>>().toBe<-3000>();
+expectTypeOf<Sum<6540, -530>>().toBe<6010>();
+expectTypeOf<Sum<-8888, -12>>().toBe<-8900>();
+expectTypeOf<Sum<9999, 1>>().toBe<10_000>();
+expectTypeOf<Sum<999_999, 1>>().toBe<1_000_000>();
+expectTypeOf<Sum<1, 999_999>>().toBe<1_000_000>();
+expectTypeOf<Sum<123_456_789, 987>>().toBe<123_457_776>();
+expectTypeOf<Sum<-1_000_000, 1>>().toBe<-999_999>();
+expectTypeOf<Sum<1, -1_000_000>>().toBe<-999_999>();
+expectTypeOf<Sum<-123_456, -654_321>>().toBe<-777_777>();
+expectTypeOf<Sum<1_000_000 | 2_000_000, 5>>().toBe<1_000_005 | 2_000_005>();
+expectTypeOf<Sum<9_007_199_254_740_990, 1>>().toBe<9_007_199_254_740_991>();
+
+// A result that cannot be represented exactly is `number`.
+expectTypeOf<Sum<9_007_199_254_740_991, 2>>().toBe<number>();
+expectTypeOf<Sum<-9_007_199_254_740_991, -2>>().toBe<number>();
+expectTypeOf<Sum<500_000_000_000_000_000_000, 500_000_000_000_000_000_000>>().toBe<number>();
+
+// A decimal fraction is not supported, so the result is `never` rather than a silently truncated whole number.
+expectTypeOf<Sum<0.5, 0.5>>().toBe<never>();
+expectTypeOf<Sum<1.5, 1.5>>().toBe<never>();
+expectTypeOf<Sum<0.25, 0.25>>().toBe<never>();
+expectTypeOf<Sum<-0.5, -0.5>>().toBe<never>();
+
+// A number written in exponent notation cannot be computed digit by digit either, so it resolves to `never` rather than a silently truncated whole number.
+expectTypeOf<Sum<1e-7, 1>>().toBe<never>();
+expectTypeOf<Sum<1e-7, 1e-7>>().toBe<never>();
+expectTypeOf<Sum<1e21, 1>>().toBe<never>();
+
+// Cancellation applies to one pair of operands, not every member of the other operand.
+expectTypeOf<Sum<2, -2 | 3>>().toBe<0 | 5>();
+expectTypeOf<Sum<-2 | 3, 2>>().toBe<0 | 5>();
+expectTypeOf<Sum<-1 | 1, -1 | 1>>().toBe<-2 | 0 | 2>();
+
+// Equal infinity is only one possible pair when the other operand is a union.
+expectTypeOf<Sum<PositiveInfinity, PositiveInfinity | NegativeInfinity>>().toBe<number>();
+expectTypeOf<Sum<NegativeInfinity, PositiveInfinity | NegativeInfinity>>().toBe<number>();
+
+// Operand order cannot change whether opposite infinities are possible.
+expectTypeOf<Sum<PositiveInfinity | NegativeInfinity, PositiveInfinity>>().toBe<number>();
+expectTypeOf<Sum<PositiveInfinity | NegativeInfinity, NegativeInfinity>>().toBe<number>();
+expectTypeOf<Sum<PositiveInfinity | NegativeInfinity, PositiveInfinity | NegativeInfinity>>().toBe<number>();
+expectTypeOf<Sum<PositiveInfinity, 1 | PositiveInfinity>>().toBe<PositiveInfinity>();
+expectTypeOf<Sum<NegativeInfinity, -1 | NegativeInfinity>>().toBe<NegativeInfinity>();
+expectTypeOf<Sum<1 | PositiveInfinity, 2 | NegativeInfinity>>().toBe<number>();
+
+// Same-sign infinity and finite results both survive, without widening to number.
+expectTypeOf<Sum<1 | PositiveInfinity, 2 | PositiveInfinity>>().toBe<3 | PositiveInfinity>();
+expectTypeOf<Sum<-1 | NegativeInfinity, -2 | NegativeInfinity>>().toBe<-3 | NegativeInfinity>();
+
+// The zero and cancellation shortcuts are also evaluated per pair.
+expectTypeOf<Sum<0 | 2, 0 | -2>>().toBe<-2 | 0 | 2>();
+expectTypeOf<Sum<0 | PositiveInfinity, 0 | NegativeInfinity>>().toBe<number>();
+expectTypeOf<Sum<any, 1>>().toBe<number>();
+expectTypeOf<Sum<1, any>>().toBe<number>();
+expectTypeOf<Sum<never, 1>>().toBe<never>();
+expectTypeOf<Sum<1, never>>().toBe<never>();
+
+// Numeric enum members hold known integers and can be used in arithmetic.
+enum Count {
+	Few = 3,
+	Many = 7,
+	Deficit = -3,
+}
+
+expectTypeOf<Sum<Count.Few, 2>>().toBe<5>();
+expectTypeOf<Sum<2, Count.Few>>().toBe<5>();
+expectTypeOf<Sum<Count.Deficit, 1>>().toBe<-2>();
+expectTypeOf<Sum<Count.Few, Count.Many>>().toBe<10>();
+expectTypeOf<Sum<Count.Few, Count.Deficit>>().toBe<0>();
+expectTypeOf<Sum<Count.Deficit, Count.Few>>().toBe<0>();
+expectTypeOf<Sum<Count.Deficit, Count.Deficit>>().toBe<-6>();
+expectTypeOf<Sum<Count.Few | Count.Many, 1>>().toBe<4 | 8>();
+expectTypeOf<Sum<Count.Few, number>>().toBe<number>();
+expectTypeOf<Sum<number, Count.Few>>().toBe<number>();
+expectTypeOf<Sum<Count.Few, any>>().toBe<number>();
+expectTypeOf<Sum<any, Count.Few>>().toBe<number>();
+expectTypeOf<Sum<Count.Few, never>>().toBe<never>();
+expectTypeOf<Sum<never, Count.Few>>().toBe<never>();
+// @ts-expect-error - Only numbers can be used in arithmetic.
+type UnknownOperand = Sum<unknown, Count.Few>;
+
+expectTypeOf<Sum<Count.Few, -1>>().toBe<2>();
+expectTypeOf<Sum<-1, Count.Few>>().toBe<2>();
+expectTypeOf<Sum<Count.Many, Count.Deficit>>().toBe<4>();
+expectTypeOf<Sum<Count.Deficit, Count.Many>>().toBe<4>();
+
+// The zero and infinity shortcuts return plain literals, like the other paths.
+enum Limit {
+	None = 0,
+	Few = 3,
+	Unlimited = 1e999, // eslint-disable-line no-loss-of-precision
+	Overdrawn = -1e999, // eslint-disable-line no-loss-of-precision
+}
+
+expectTypeOf<Sum<Limit.Few, 0>>().toBe<3>();
+expectTypeOf<Sum<0, Limit.Few>>().toBe<3>();
+expectTypeOf<Sum<Limit.Few, Limit.None>>().toBe<3>();
+expectTypeOf<Sum<Limit.None, Limit.None>>().toBe<0>();
+expectTypeOf<Sum<Limit.Unlimited, 5>>().toBe<PositiveInfinity>();
+expectTypeOf<Sum<5, Limit.Unlimited>>().toBe<PositiveInfinity>();
+expectTypeOf<Sum<Limit.Overdrawn, 5>>().toBe<NegativeInfinity>();
+expectTypeOf<Sum<Limit.Unlimited, Limit.Unlimited>>().toBe<PositiveInfinity>();
+expectTypeOf<Sum<Limit.Unlimited, Limit.Overdrawn>>().toBe<number>();
+
+// A numeric brand does not change arithmetic on its underlying value.
+expectTypeOf<Sum<Tagged<2, 'Amount'>, 1>>().toBe<3>();
+expectTypeOf<Sum<2, Tagged<1, 'Amount'>>>().toBe<3>();
+
+expectTypeOf<Sum<Tagged<2, 'Amount'>, Tagged<1, 'Amount'>>>().toBe<3>();
+expectTypeOf<Sum<Tagged<1, 'Amount'>, Tagged<-2, 'Amount'>>>().toBe<-1>();
+expectTypeOf<Sum<Tagged<-2, 'Amount'>, Tagged<1, 'Amount'>>>().toBe<-1>();
+expectTypeOf<Sum<Tagged<-2, 'Amount'>, Tagged<-3, 'Amount'>>>().toBe<-5>();
+expectTypeOf<Sum<Tagged<0, 'Amount'>, Tagged<2, 'Amount'>>>().toBe<2>();
+expectTypeOf<Sum<Tagged<2, 'Amount'>, Tagged<0, 'Amount'>>>().toBe<2>();
+
+expectTypeOf<Sum<Opaque<5, 'Amount'>, Opaque<2, 'Amount'>>>().toBe<7>();
+expectTypeOf<Sum<Tagged<Tagged<5, 'Amount'>, 'Validated'>, 2>>().toBe<7>();
+expectTypeOf<Sum<5 & {readonly __brand: unique symbol}, 2>>().toBe<7>();
+expectTypeOf<Sum<Tagged<1 | 2, 'Amount'>, Tagged<1 | 2, 'Amount'>>>().toBe<2 | 3 | 4>();
+expectTypeOf<Sum<Tagged<number, 'Amount'>, 2>>().toBe<number>();
+expectTypeOf<Sum<Tagged<1.5, 'Amount'>, 2>>().toBe<never>();
+expectTypeOf<Sum<2, Tagged<1e-7, 'Amount'>>>().toBe<never>();
+expectTypeOf<Sum<Tagged<1e21, 'Amount'>, 2>>().toBe<never>();
+expectTypeOf<Sum<Tagged<PositiveInfinity, 'Amount'>, 2>>().toBe<PositiveInfinity>();
+expectTypeOf<Sum<Tagged<NegativeInfinity, 'Amount'>, 2>>().toBe<NegativeInfinity>();
+expectTypeOf<Sum<Tagged<PositiveInfinity, 'Amount'>, Tagged<NegativeInfinity, 'Amount'>>>().toBe<number>();
+expectTypeOf<Sum<Tagged<2, 'Amount'>, any>>().toBe<number>();
+expectTypeOf<Sum<any, Tagged<2, 'Amount'>>>().toBe<number>();
+expectTypeOf<Sum<Tagged<2, 'Amount'>, never>>().toBe<never>();
+expectTypeOf<Sum<never, Tagged<2, 'Amount'>>>().toBe<never>();
