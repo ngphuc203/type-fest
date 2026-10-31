@@ -51,7 +51,7 @@
 	},
 	"devDependencies": {
 		"@eslint/markdown": "^8.0.1",
-		"@sindresorhus/tsconfig": "^8.0.1",
+		"@sindresorhus/tsconfig": "^9.0.0",
 		"@types/node": "^26.6.5",
 		"@typescript-eslint/parser": "^8.71.2",
 		"@typescript/native": "npm:typescript@^7.0.2",
@@ -60,7 +60,7 @@
 		"eslint": "^10.12.0",
 		"npm-run-all2": "^9.0.3",
 		"nz": "^0.1.0",
-		"typescript": "^6.0.0",
+		"typescript": "^7.0.2",
 		"typescript-eslint": "^8.71.2",
 		"xo": "^5.0.1"
 	}
